@@ -98,6 +98,10 @@
 
 
 
+## Operations CLI (Fork)
+
+[`nwctl`](./tools/nwctl/README.md) is an independent, read-only operations tool for profiles, authentication, backup status/destinations, remote directory browsing, users and audit pages. Requires Node.js 22.12+. It does not replace Bitwarden `bw`, deploy Workers, run backups or provide a server-side read-only credential scope. See its README for packaging, JSON output, permissions and limitations.
+
 ## CLI deploy
 
 ```powershell

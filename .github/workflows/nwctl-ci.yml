@@ -1,0 +1,55 @@
+name: nwctl CI
+on:
+  push:
+    branches: [main]
+    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
+  pull_request:
+    branches: [main]
+    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: nwctl-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    name: nwctl / Linux
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            tools/nwctl/package-lock.json
+      - name: Install existing Worker test runtime (no deployment)
+        run: npm ci --ignore-scripts
+      - name: Worker security and compatibility regressions
+        run: |
+          npm run test:config-compatibility
+          npm run test:web-crypto
+          npm run test:notifications-security
+          npm run test:webauthn-connectors
+      - name: Install standalone CLI
+        run: npm ci --prefix tools/nwctl
+      - name: Build, typecheck and unit tests
+        working-directory: tools/nwctl
+        run: |
+          npm run build
+          npm run typecheck
+          npm test
+          npm audit --omit=dev --audit-level=high
+      - name: Isolated workerd E2E and clean package install
+        working-directory: tools/nwctl
+        run: npm run test:e2e
+      - name: Verify distributable file list and whitespace
+        working-directory: tools/nwctl
+        run: |
+          npm pack --dry-run
+          git diff --check
