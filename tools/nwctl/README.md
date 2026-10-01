@@ -4,7 +4,7 @@
 
 ## 安装
 
-要求 Node.js **22.12+**（Linux/macOS 验证；Windows 暂不保证）。仓库源码安装不需要根目录依赖：
+要求 Node.js **22.12+**。本次生产支持平台为 Linux；macOS 的双行粘贴登录在 CI 中仍超时，尚未完成验收，Windows 未验证。仓库源码安装不需要根目录依赖：
 
 ```sh
 cd tools/nwctl
@@ -21,7 +21,7 @@ npm install /absolute/path/nodewarden-ops-cli-0.1.0.tgz
 ./node_modules/.bin/nwctl --version
 ```
 
-`private: true` 防止意外 npm publish。本轮不发布 npm，也不自动全局安装。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
+`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.1.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
 
 ## 开始使用
 
@@ -97,7 +97,7 @@ npm pack --dry-run
 
 E2E 在真实 Miniflare/workerd 下运行当前 Worker，通过真实 CLI 子进程访问 HTTP，D1/R2/KV 全部隔离且没有 remote binding/CF 凭据。WebDAV、S3 和 Bitwarden 安装接口仅使用明确的 provider fixture，禁止外网连接；不能把测试目录和数据当作生产核验。测试专用路由只出现在内存里的 Worker 测试入口，既不修改生产 src，也不进入 tgz。
 
-CI 在 Linux/macOS 执行类型检查、单元测试、真实 Worker E2E 和干净目录安装。第一版兼容基线是 Fork `a72592e` 的 NodeWarden 1.8.0；未知新类型/契约变化会报错，而不是猜测兼容。源代码和许可证位于本仓库 `tools/nwctl`；Commander 的 MIT 许可见 `THIRD_PARTY_NOTICES`。
+CI 只保留一条 Linux 验证：在 `main` 源码推送、面向 `main` 的 PR 或手动触发时执行 Worker 安全/兼容性回归、CLI 类型检查、单元测试、真实 Worker E2E、依赖审计和干净目录安装。`production` 的部署由 Cloudflare Workers Builds 负责，不另用 GitHub Actions 重复部署；生产 PR 和生产分支推送不重复触发 CLI 构建。第一版兼容基线是 Fork `a72592e` 的 NodeWarden 1.8.0；未知新类型/契约变化会报错，而不是猜测兼容。源代码和许可证位于本仓库 `tools/nwctl`；Commander 的 MIT 许可见 `THIRD_PARTY_NOTICES`。
 
 ## 明确不包含
 

@@ -1,10 +1,11 @@
 name: nwctl CI
 on:
   push:
-    branches: [main, 'feat/nwctl-readonly']
-    paths: ['tools/nwctl/**', '.github/workflows/nwctl-ci.yml', 'src/**', 'shared/**', 'package*.json', 'README*.md']
+    branches: [main]
+    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
   pull_request:
-    paths: ['tools/nwctl/**', '.github/workflows/nwctl-ci.yml', 'src/**', 'shared/**', 'package*.json', 'README*.md']
+    branches: [main]
+    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,12 +14,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   verify:
-    name: nwctl / ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
-    runs-on: ${{ matrix.os }}
+    name: nwctl / Linux
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0
@@ -33,6 +30,12 @@ jobs:
             tools/nwctl/package-lock.json
       - name: Install existing Worker test runtime (no deployment)
         run: npm ci --ignore-scripts
+      - name: Worker security and compatibility regressions
+        run: |
+          npm run test:config-compatibility
+          npm run test:web-crypto
+          npm run test:notifications-security
+          npm run test:webauthn-connectors
       - name: Install standalone CLI
         run: npm ci --prefix tools/nwctl
       - name: Build, typecheck and unit tests
