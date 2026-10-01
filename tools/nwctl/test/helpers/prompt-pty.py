@@ -5,6 +5,7 @@ import os
 import pty
 import select
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -51,7 +52,23 @@ class SyntheticAuth(BaseHTTPRequestHandler):
             self.reply(401, {})
 
 
-server = ThreadingHTTPServer(("127.0.0.1", 0), SyntheticAuth)
+def reject_reverse_dns(*args):
+    raise AssertionError("Loopback auth fixture must not perform reverse DNS")
+
+
+socket.getfqdn = reject_reverse_dns
+
+
+class NumericLoopbackServer(ThreadingHTTPServer):
+    def server_bind(self):
+        # HTTPServer.server_bind calls getfqdn; this isolated fixture needs no DNS.
+        self.socket.bind(self.server_address)
+        self.server_address = self.socket.getsockname()
+        self.server_name = "127.0.0.1"
+        self.server_port = self.server_address[1]
+
+
+server = NumericLoopbackServer(("127.0.0.1", 0), SyntheticAuth)
 thread = threading.Thread(target=server.serve_forever, daemon=True)
 thread.start()
 try:
