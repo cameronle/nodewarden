@@ -137,6 +137,18 @@ try:
                     "inputFlags": attrs[0],
                     "requests": requests,
                 }), file=sys.stderr, flush=True)
+                if sys.platform == "darwin":
+                    # Sample only this synthetic CLI child; print stack frames,
+                    # not process memory, terminal contents or environment.
+                    sample_path = os.path.join(directory, "child-stack.txt")
+                    subprocess.run(["/usr/bin/sample", str(proc.pid), "1", "1", "-file", sample_path],
+                                   capture_output=True, timeout=4, check=False)
+                    if os.path.isfile(sample_path):
+                        sample_text = open(sample_path).read()
+                        graph = sample_text.split("Call graph:", 1)
+                        if len(graph) == 2:
+                            print("PTY child stack:" + "\n".join(graph[1].splitlines()[:70]),
+                                  file=sys.stderr, flush=True)
                 raise
             print("PTY phase: CLI exited", file=sys.stderr, flush=True)
             deadline = time.monotonic() + 1
