@@ -35,12 +35,16 @@ async function hiddenCredentials(): Promise<{
       process.stdin.removeListener("error", inputError);
       process.removeListener("SIGINT", interrupt);
       process.removeListener("SIGTERM", interrupt);
-      process.stdin.setRawMode(old);
       process.stdin.pause();
-      process.stderr.write("\n");
-      error
-        ? reject(error)
-        : resolve({ clientId: values[0], clientSecret: values[1] });
+      // Node stops native stdin reads on the next tick after pause(). Keep raw
+      // mode until then so BSD PTYs cannot block on a pasted trailing newline.
+      setImmediate(() => {
+        process.stdin.setRawMode(old);
+        process.stderr.write("\n");
+        error
+          ? reject(error)
+          : resolve({ clientId: values[0], clientSecret: values[1] });
+      });
     };
     const interrupt = () =>
       done(new CliError("INTERRUPTED", "Login interrupted.", 130));
