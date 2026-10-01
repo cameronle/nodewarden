@@ -1,4 +1,5 @@
 """Exercise real TTY input with an explicitly synthetic local auth server."""
+import faulthandler
 import json
 import os
 import pty
@@ -13,6 +14,8 @@ import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs
 
+faulthandler.enable()
+faulthandler.dump_traceback_later(10)
 node, scenario = sys.argv[1:3]
 client_id = "user.pty-fixture-id"
 secret = "pty-synthetic-secret"
@@ -57,7 +60,9 @@ try:
         base = [node, "bin/nwctl.mjs", "--config-dir", config, "--json"]
         url = "http://127.0.0.1:" + str(server.server_address[1])
         subprocess.run(base + ["profile", "add", "test", "--server", url, "--allow-loopback-http"], check=True, capture_output=True)
+        print("PTY phase: profile prepared", file=sys.stderr, flush=True)
         master, slave = pty.openpty()
+        print("PTY phase: terminal opened", file=sys.stderr, flush=True)
         original = termios.tcgetattr(slave)
         proc = subprocess.Popen(base + ["auth", "login", "--apikey"], stdin=slave, stderr=slave, stdout=subprocess.PIPE)
         captured = bytearray()
@@ -90,8 +95,16 @@ try:
                 else:
                     os.write(master, (secret + ("x\x7f" if scenario == "backspace" else "") + "\r").encode())
             stdout, _ = proc.communicate(timeout=5)
+            print("PTY phase: CLI exited", file=sys.stderr, flush=True)
+            deadline = time.monotonic() + 1
             while select.select([master], [], [], 0.05)[0]:
-                captured.extend(os.read(master, 4096))
+                assert time.monotonic() < deadline, "TTY drain did not terminate"
+                chunk = os.read(master, 4096)
+                # BSD/macOS masters may remain readable at EOF; do not spin.
+                if not chunk:
+                    break
+                captured.extend(chunk)
+            print("PTY phase: terminal drained", file=sys.stderr, flush=True)
             combined = stdout + captured
             assert secret.encode() not in combined, "Secret echoed"
             assert client_id.encode() not in combined, "Client ID echoed"

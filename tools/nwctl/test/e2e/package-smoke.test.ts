@@ -37,7 +37,10 @@ test(
       await exec(
         "npm",
         ["install", "--omit=dev", "--ignore-scripts", "--offline", archive],
-        { cwd: dir },
+        {
+          cwd: dir,
+          env: { ...process.env, npm_config_cache: join(dir, "empty-cache") },
+        },
       );
       const bin = join(dir, "node_modules", ".bin", "nwctl");
       assert.match(

@@ -21,7 +21,7 @@ npm install /absolute/path/nodewarden-ops-cli-0.1.0.tgz
 ./node_modules/.bin/nwctl --version
 ```
 
-`private: true` 防止意外 npm publish。本轮不发布 npm，也不自动全局安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
+`private: true` 防止意外 npm publish。本轮不发布 npm，也不自动全局安装。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
 
 ## 开始使用
 
