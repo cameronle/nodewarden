@@ -111,7 +111,33 @@ try:
                     os.write(master, b"\x03")
                 else:
                     os.write(master, (secret + ("x\x7f" if scenario == "backspace" else "") + "\r").encode())
-            stdout, _ = proc.communicate(timeout=5)
+            try:
+                stdout, _ = proc.communicate(timeout=5)
+            except subprocess.TimeoutExpired as error:
+                # Emit state only, never terminal contents or credential values.
+                os.set_blocking(master, False)
+                for _ in range(32):
+                    if not select.select([master], [], [], 0)[0]:
+                        break
+                    try:
+                        chunk = os.read(master, 4096)
+                    except BlockingIOError:
+                        break
+                    if not chunk:
+                        break
+                    captured.extend(chunk)
+                attrs = termios.tcgetattr(slave)
+                print(json.dumps({
+                    "phase": "CLI timeout",
+                    "scenario": scenario,
+                    "stdoutBytes": len(error.output or b""),
+                    "secretPromptSeen": b"API Secret (hidden):" in captured,
+                    "echoEnabled": bool(attrs[3] & termios.ECHO),
+                    "canonicalEnabled": bool(attrs[3] & termios.ICANON),
+                    "inputFlags": attrs[0],
+                    "requests": requests,
+                }), file=sys.stderr, flush=True)
+                raise
             print("PTY phase: CLI exited", file=sys.stderr, flush=True)
             deadline = time.monotonic() + 1
             while select.select([master], [], [], 0.05)[0]:
