@@ -1,5 +1,17 @@
 // Complete German locale. Translate the values in this file to add a new language. Keep keys and placeholders unchanged.
 const de: Record<string, string> = {
+  "txt_cli_approval": "CLI-Vorgang freigeben",
+  "txt_cli_warning": "Genehmigen Sie nur selbst angeforderte Vorgänge. Prüfen Sie Aktion und Ziel. Backups können gemäß Aufbewahrungsregel alte Archive löschen. Die Freigabe ist kurz gültig und einmalig; das Master-Passwort wird nicht an die CLI gesendet.",
+  "txt_cli_failed": "Freigabe fehlgeschlagen. Prüfen Sie Konto, Passwort, Anfragestatus und Ablaufzeit.",
+  "txt_cli_instance": "Instanz",
+  "txt_cli_action": "Vorgang",
+  "txt_cli_device": "Anfragendes Gerät",
+  "txt_cli_expires": "Gültig bis",
+  "txt_cli_state": "Zustand",
+  "txt_cli_password": "Master-Passwort (nur für diese Bestätigung)",
+  "txt_cli_approve": "Vorgang genehmigen",
+  "txt_cli_deny": "Ablehnen",
+  "txt_cli_approved": "Genehmigt, noch nicht ausgeführt. Führen Sie die Anfrage innerhalb von zwei Minuten in der CLI aus.",
   "nav_account_settings": "Kontoeinstellungen",
   "nav_admin_panel": "Admin-Panel",
   "nav_log_center": "Protokollcenter",

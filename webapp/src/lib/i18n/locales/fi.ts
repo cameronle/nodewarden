@@ -1,5 +1,17 @@
 // Complete Finnish locale. Translate the values in this file to add a new language. Keep keys and placeholders unchanged.
 const fi: Record<string, string> = {
+  "txt_cli_approval": "CLI-toiminnon hyväksyntä",
+  "txt_cli_warning": "Hyväksy vain itse pyytämiäsi toimintoja. Tarkista toiminto ja kohde. Varmuuskopiointi voi poistaa vanhoja arkistoja säilytyssäännön mukaisesti. Hyväksyntä on lyhytaikainen ja kertakäyttöinen; pääsalasanaa ei lähetetä CLI:lle.",
+  "txt_cli_failed": "Hyväksyntä epäonnistui. Tarkista tili, salasana, pyynnön tila ja voimassaolo.",
+  "txt_cli_instance": "Palvelin",
+  "txt_cli_action": "Toiminto",
+  "txt_cli_device": "Pyytävä laite",
+  "txt_cli_expires": "Vanhenee",
+  "txt_cli_state": "Tila",
+  "txt_cli_password": "Pääsalasana (vain tähän vahvistukseen)",
+  "txt_cli_approve": "Hyväksy toiminto",
+  "txt_cli_deny": "Hylkää",
+  "txt_cli_approved": "Hyväksytty, ei vielä suoritettu. Suorita pyyntö CLI:ssä kahden minuutin kuluessa.",
   "nav_account_settings": "Tilin asetukset",
   "nav_admin_panel": "Hallintapaneeli",
   "nav_log_center": "Lokikeskus",

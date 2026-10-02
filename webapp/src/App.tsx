@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { useLocation } from 'wouter';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import AppAuthenticatedShell from '@/components/AppAuthenticatedShell';
+import CliApprovalPage from '@/components/CliApprovalPage';
 import AppGlobalOverlays, { type AppConfirmState } from '@/components/AppGlobalOverlays';
 import AuthRequestApprovalDialog from '@/components/AuthRequestApprovalDialog';
 import AuthViews from '@/components/AuthViews';
@@ -1934,8 +1935,9 @@ export default function App() {
   const isPublicSendRoute = !!publicSendMatch;
   const isMalformedSendRoute = /^\/send(?:\/|$)/i.test(effectiveLocation) && !publicSendMatch;
   const isKnownAuthRoute = AUTH_ROUTES.has(routeLocation) || isPublicSendRoute || isRecoverTwoFactorRoute;
-  const isKnownAppRoute = APP_ROUTES.has(routeLocation) || isPublicSendRoute || isImportHashRoute;
-  const isUnknownRoute = isMalformedSendRoute || (phase === 'app' ? !isKnownAppRoute : !isKnownAuthRoute && !APP_ROUTES.has(routeLocation));
+  const cliApprovalMatch = routeLocation.match(/^\/cli-approval\/([a-f0-9-]{36})$/);
+  const isKnownAppRoute = APP_ROUTES.has(routeLocation) || isPublicSendRoute || isImportHashRoute || !!cliApprovalMatch;
+  const isUnknownRoute = isMalformedSendRoute || (!cliApprovalMatch && (phase === 'app' ? !isKnownAppRoute : !isKnownAuthRoute && !APP_ROUTES.has(routeLocation)));
   const isImportRoute = routeLocation === IMPORT_ROUTE || IMPORT_ROUTE_ALIASES.has(routeLocation);
   const showSidebarToggle = mobileLayout && location === '/sends';
   const sidebarToggleTitle = location === '/vault' ? t('txt_folders') : t('txt_type');
@@ -2355,6 +2357,8 @@ export default function App() {
       </>
     );
   }
+
+  if (cliApprovalMatch && phase === 'app' && !IS_DEMO_MODE) return <CliApprovalPage id={cliApprovalMatch[1]} email={profile?.email || session?.email || ''} isAdmin={isAdmin} authedFetch={authedFetch} onBack={() => navigate('/vault')} />;
 
   return (
     <>

@@ -51,7 +51,7 @@ test(
       );
       assert.equal(
         (await exec(bin, ["--version"], { cwd: dir })).stdout.trim(),
-        "0.2.0",
+        "0.3.0",
       );
       const artifact = await readFile(
         join(dir, "node_modules", "nodewarden-ops-cli", "dist", "cli.mjs"),
@@ -111,6 +111,36 @@ test(
         (await cli(config, ["devices", "list"], undefined, bin)).data.data
           .count,
         1,
+      );
+      assert.equal(
+        (
+          await cli(
+            config,
+            ["devices", "show", (await new Store(config).profile()).device],
+            undefined,
+            bin,
+          )
+        ).code,
+        0,
+      );
+      assert.equal(
+        (await cli(config, ["invites", "list"], undefined, bin)).code,
+        0,
+      );
+      assert.equal(
+        (
+          await cli(
+            config,
+            ["backup", "run", "--destination", "dav", "--dry-run"],
+            undefined,
+            bin,
+          )
+        ).code,
+        0,
+      );
+      assert.equal(
+        (await cli(config, ["audit", "settings", "show"], undefined, bin)).code,
+        0,
       );
       const audit = await cli(
         config,

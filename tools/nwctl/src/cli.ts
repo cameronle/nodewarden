@@ -10,10 +10,14 @@ import { users } from "./commands/users.js";
 import { audit } from "./commands/audit.js";
 import { devices } from "./commands/devices.js";
 import { status } from "./commands/status.js";
+import { invites } from "./commands/invites.js";
+import { operations } from "./step-up.js";
 const program = new Command()
   .name("nwctl")
-  .description("NodeWarden inspection and dedicated CLI session management")
-  .version("0.2.0")
+  .description(
+    "NodeWarden operations with exact-target controls and browser approval",
+  )
+  .version("0.3.0")
   .option("--json", "Machine-readable JSON envelope")
   .option("--profile <name>", "Select a configured instance")
   .option(
@@ -38,6 +42,8 @@ for (const register of [
   audit,
   devices,
   status,
+  invites,
+  operations,
 ])
   register(program, c);
 try {

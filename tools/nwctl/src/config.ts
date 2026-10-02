@@ -229,6 +229,14 @@ export class Store {
       );
     return { token: s.token, expiresAt: s.expiresAt };
   }
+  async saveOperation(id: string, value: unknown) {
+    if (!/^[a-f0-9-]{36}$/.test(id)) invalid("Invalid operation ID.");
+    await this.write(`operation-${id}.json`, value);
+  }
+  async operation(id: string) {
+    if (!/^[a-f0-9-]{36}$/.test(id)) invalid("Invalid operation ID.");
+    return this.read(`operation-${id}.json`);
+  }
   async logout(p: Profile) {
     await this.ensure();
     const file = `session-${p.name}.json`;

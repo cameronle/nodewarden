@@ -1,10 +1,13 @@
 import { CliError, invalid } from "./errors.js";
-import { rememberSecret } from "./output.js";
+import { rememberSecret, learnSecrets } from "./output.js";
 const reads = new Set([
   "/api/config",
   "/api/version",
   "/api/accounts/profile",
   "/api/devices",
+  "/api/devices/authorized",
+  "/api/admin/invites",
+  "/api/admin/logs/settings",
   "/api/admin/backup/settings",
   "/api/admin/backup/remote",
   "/api/admin/users",
@@ -53,8 +56,8 @@ export class Client {
     readonly timeout = 15000,
   ) {
     this.origin = serverOrigin(server, allowLoopback);
-    if (!Number.isInteger(timeout) || timeout < 50 || timeout > 120000)
-      invalid("Timeout must be an integer between 50 and 120000 milliseconds.");
+    if (!Number.isInteger(timeout) || timeout < 50 || timeout > 900000)
+      invalid("Timeout must be an integer between 50 and 900000 milliseconds.");
   }
   get(path: string, query: Record<string, string> = {}, token?: string) {
     return this.request("GET", path, query, undefined, token);
@@ -77,24 +80,42 @@ export class Client {
       token,
     );
   }
+  write(
+    method: "POST" | "PUT" | "DELETE",
+    path: string,
+    body: Record<string, unknown>,
+    token: string,
+  ) {
+    learnSecrets(body);
+    return this.request(method, path, {}, JSON.stringify(body), token);
+  }
   private async request(
-    method: "GET" | "POST" | "DELETE",
+    method: "GET" | "POST" | "PUT" | "DELETE",
     path: string,
     query: Record<string, string>,
-    body?: URLSearchParams,
+    body?: URLSearchParams | string,
     token?: string,
   ): Promise<unknown> {
+    const segment = "[A-Za-z0-9_%~-]+";
     const allowed =
-      method === "DELETE"
-        ? /^\/api\/devices\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
-            path,
-          )
-        : (method === "GET" ? reads : posts).has(path);
+      method === "GET"
+        ? reads.has(path)
+        : method === "PUT"
+          ? new RegExp(`^/api/devices/${segment}/name$`).test(path)
+          : method === "DELETE"
+            ? new RegExp(`^/api/devices/(?:authorized/)?${segment}$`).test(
+                path,
+              ) && path !== "/api/devices/authorized"
+            : posts.has(path) ||
+              path === "/api/ops/requests" ||
+              /^\/api\/ops\/requests\/[a-f0-9-]{36}\/(status|execute|cancel)$/.test(
+                path,
+              );
     if (!allowed) invalid("Endpoint is not in the operations API allowlist.");
     const url = new URL(path, this.origin);
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
     rememberSecret(token);
-    if (body)
+    if (body instanceof URLSearchParams)
       for (const k of ["client_secret", "token", "refresh_token"])
         rememberSecret(body.get(k));
     const deadline = Date.now() + this.timeout;
@@ -113,7 +134,12 @@ export class Client {
           headers: {
             Accept: "application/json",
             ...(body
-              ? { "Content-Type": "application/x-www-form-urlencoded" }
+              ? {
+                  "Content-Type":
+                    typeof body === "string"
+                      ? "application/json"
+                      : "application/x-www-form-urlencoded",
+                }
               : {}),
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
@@ -158,11 +184,16 @@ export class Client {
               : status >= 300 && status < 400
                 ? "REDIRECT_REJECTED"
                 : "HTTP_ERROR",
-            `HTTP ${status}. ${exit === 3 ? "Login required or rejected." : exit === 4 ? "Active administrator permission required." : status === 409 ? (path === "/api/admin/backup/settings" ? "Server configuration needs attention; no repair performed." : "Remote listing or business request conflicted; no modification performed.") : "Request failed; raw response suppressed."}`,
+            `HTTP ${status}. ${method !== "GET" && path.startsWith("/api/") ? "Write may have partially completed. Inspect the exact target and operation status before repeating; raw response suppressed." : exit === 3 ? "Login required or rejected." : exit === 4 ? "Active administrator permission required." : status === 409 ? (path === "/api/admin/backup/settings" ? "Server configuration needs attention; no repair performed." : "Remote listing or business request conflicted; no modification performed.") : "Request failed; raw response suppressed."}`,
             exit,
             status,
           );
         }
+        if (
+          response.status === 204 &&
+          /^\/api\/ops\/requests\/[a-f0-9-]{36}\/execute$/.test(path)
+        )
+          return null;
         const reader = response.body?.getReader();
         const chunks: Uint8Array[] = [];
         let size = 0;
@@ -196,9 +227,11 @@ export class Client {
         if (e instanceof CliError) throw e;
         throw new CliError(
           controller.signal.aborted ? "TIMEOUT" : "NETWORK_ERROR",
-          controller.signal.aborted
-            ? "Request timed out."
-            : "Network or TLS request failed; raw diagnostics suppressed.",
+          method !== "GET"
+            ? "Write outcome unknown; do not retry blindly. Read back the exact target."
+            : controller.signal.aborted
+              ? "Request timed out."
+              : "Network or TLS request failed; raw diagnostics suppressed.",
           5,
         );
       } finally {

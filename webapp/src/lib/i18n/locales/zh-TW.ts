@@ -1,5 +1,17 @@
 // Complete Traditional Chinese locale generated from zh-CN with OpenCC. Keep keys and placeholders unchanged.
 const zhTW: Record<string, string> = {
+  "txt_cli_approval": "CLI 操作授權",
+  "txt_cli_warning": "只批准你本人發起的操作，請核對動作和目標。執行備份可能按現有保留策略刪除舊檔。授權短時有效且只能使用一次，主密碼不會交給 CLI。",
+  "txt_cli_failed": "無法授權此操作，請核對帳號、主密碼、請求狀態和有效期。",
+  "txt_cli_instance": "實例",
+  "txt_cli_action": "動作",
+  "txt_cli_device": "請求裝置",
+  "txt_cli_expires": "有效期",
+  "txt_cli_state": "狀態",
+  "txt_cli_password": "主密碼（僅本次確認）",
+  "txt_cli_approve": "批准此操作",
+  "txt_cli_deny": "拒絕",
+  "txt_cli_approved": "已授權，但尚未執行。請在兩分鐘內返回 CLI 執行此請求。",
   "nav_account_settings": "賬戶設置",
   "nav_admin_panel": "用戶管理",
   "nav_log_center": "日誌中心",

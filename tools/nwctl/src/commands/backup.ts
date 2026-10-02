@@ -3,10 +3,28 @@ import { Context } from "../context.js";
 import { settings, remotePage } from "../contracts.js";
 import { duration, health } from "../backup-health.js";
 import { invalid, incompatible } from "../errors.js";
+import { mutationOptions } from "../mutations.js";
+import { requestOperation } from "../step-up.js";
+import { opsParameters } from "../../../../shared/ops-schema.js";
 export function backups(program: Command, c: Context) {
   const group = program
     .command("backup")
-    .description("Read-only backup inspection");
+    .description("Backup inspection and browser-approved operations");
+  mutationOptions(
+    group
+      .command("run")
+      .requiredOption("--destination <id>", "Exact destination ID"),
+  ).action(
+    c.action("backup run", async (opts) => {
+      const d = settings(await c.query("/api/admin/backup/settings")).find(
+        (d) => d.id === opts.destination,
+      );
+      if (!d) return invalid("Destination not found.");
+      await requestOperation(c, { ...opts, preview: d }, "backup.run", {
+        destinationId: d.id,
+      });
+    }),
+  );
   group
     .command("destinations")
     .description("Configured destinations (credentials omitted)")
@@ -39,9 +57,32 @@ export function backups(program: Command, c: Context) {
         if (opts.check && !result.healthy) process.exitCode = 7;
       }),
     );
-  group
+  const remote = group
     .command("remote")
-    .description("Browse one remote directory without downloads")
+    .description("List or request approved archive operations");
+  for (const action of ["download", "verify"] as const) {
+    const cmd = remote
+      .command(action)
+      .requiredOption("--destination <id>", "Exact destination ID")
+      .requiredOption("--path <path>", "Exact ZIP path from remote list");
+    if (action === "download")
+      cmd.requiredOption(
+        "--output <file>",
+        "Private output file; no overwrite",
+      );
+    mutationOptions(cmd).action(
+      c.action("backup remote " + action, async (opts) => {
+        const parameters = { destinationId: opts.destination, path: opts.path };
+        try {
+          opsParameters("backup." + action, parameters);
+        } catch {
+          invalid("Invalid destination or archive path.");
+        }
+        await requestOperation(c, opts, `backup.${action}`, parameters);
+      }),
+    );
+  }
+  remote
     .command("list")
     .requiredOption("--destination <id>", "Configured destination ID")
     .option("--path <path>", "Explicit directory path", "")

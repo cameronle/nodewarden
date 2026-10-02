@@ -80,6 +80,32 @@ test("HTML and malformed JSON fail contract validation; redirects are not follow
       },
     );
 });
+test("failed operation writes never claim no modification and never retry", async () => {
+  for (const status of [409, 500]) {
+    let calls = 0;
+    await fixture(
+      (_, res) => {
+        calls++;
+        res.writeHead(status);
+        res.end("provider-secret");
+      },
+      async (url) => {
+        await assert.rejects(
+          new Client(url, true).write(
+            "POST",
+            "/api/ops/requests/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/execute",
+            { proof: "a".repeat(64) },
+            "fixture-token",
+          ),
+          (e: any) =>
+            /inspect/i.test(e.message) &&
+            !/no modification performed|provider-secret/.test(e.message),
+        );
+        assert.equal(calls, 1);
+      },
+    );
+  }
+});
 test("GET retries once but POST never retries; slow bodies respect deadline", async () => {
   let calls = 0;
   await fixture(
