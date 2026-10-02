@@ -9,7 +9,7 @@ test("standalone help and version need no network or profile", () => {
   assert.match(h.stdout, /backup/);
   const v = run("--version");
   assert.equal(v.status, 0, v.stderr);
-  assert.equal(v.stdout.trim(), "0.1.0");
+  assert.equal(v.stdout.trim(), "0.2.0");
 });
 test("unknown commands and flags return JSON errors without echoing argv", () => {
   for (const args of [
@@ -25,11 +25,15 @@ test("unknown commands and flags return JSON errors without echoing argv", () =>
     assert.ok(!r.stderr.includes("bad-secret"));
   }
 });
-test("every MVP command has help and no write command is offered", () => {
+test("every supported command has help and no backup write command is offered", () => {
   for (const args of [
     ["profile"],
     ["auth"],
     ["doctor"],
+    ["status"],
+    ["devices", "list"],
+    ["auth", "ensure"],
+    ["auth", "logout"],
     ["whoami"],
     ["backup", "destinations"],
     ["backup", "status"],

@@ -1,6 +1,6 @@
-# nwctl — NodeWarden 只读运维 CLI
+# nwctl — NodeWarden 运维 CLI
 
-`nwctl` 管理实例运维信息，**不是密码库客户端**。密码库条目、解密与同步仍使用官方 Bitwarden `bw`。本包属于 Fork 的独立工具，不会部署 Worker、触发备份、修改目标、删除文件或用户。
+`nwctl` 管理实例运维信息，**不是密码库客户端**。密码库条目、解密与同步仍使用官方 Bitwarden `bw`。本包属于 Fork 的独立工具，不会部署 Worker、触发备份、修改目标、删除文件或用户。业务查询保持只读；0.2.0 新增的 `auth logout --server` 只撤销当前 profile 对应的 CLI 专属设备。
 
 ## 安装
 
@@ -14,14 +14,14 @@ node bin/nwctl.mjs --help
 npm pack
 ```
 
-将生成的 `nodewarden-ops-cli-0.1.0.tgz` 带到任何有 Node.js 的干净目录：
+将生成的 `nodewarden-ops-cli-0.2.0.tgz` 带到任何有 Node.js 的干净目录：
 
 ```sh
-npm install /absolute/path/nodewarden-ops-cli-0.1.0.tgz
+npm install /absolute/path/nodewarden-ops-cli-0.2.0.tgz
 ./node_modules/.bin/nwctl --version
 ```
 
-`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.1.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
+`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.2.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
 
 ## 开始使用
 
@@ -46,6 +46,33 @@ nwctl auth logout
 
 在受控本地终端输入个人 `client_id` 与 `client_secret`，**两项均隐藏输入**。不要把 Secret、主密码或 Token 贴进聊天或写在命令行参数。CLI 不获取 API Key、不创建 Key、不请求主密码。非 TTY 默认拒绝登录；确需受控管道时使用 `auth login --apikey --credentials-stdin`，stdin 必须是客户端 ID 与 API Secret 两行，由安全凭据工具提供，不能在 shell 历史里写明文。
 
+## 0.2.0：日常运维与会话管理
+
+```sh
+# 复用经过服务端核验的会话；没有或过期时才提示输入 API Key
+nwctl --profile prod auth ensure
+# 本机显式使用已批准的 root 私有凭据缓存
+nwctl --profile prod auth ensure --cached
+# 一屏总览，--check 用于定时巡检退出码
+nwctl --profile prod status
+nwctl --profile prod status --check --max-age 48h
+nwctl --profile prod devices list
+# 只撤销本 profile 的 CLI 设备，不影响手机/浏览器等其他设备
+nwctl --profile prod --timeout 30000 auth logout --server
+# 审计筛选仍只读取一个分页，不承诺全量导出
+nwctl --profile prod audit list --category device --level security --query device.delete
+nwctl --profile prod audit list --from 2026-10-01T00:00:00+08:00 --to 2026-10-02T00:00:00+08:00
+```
+
+- `auth ensure --credentials-stdin` 支持受控两行输入；已存在有效会话时复用，不自动换账号。不在后台续期；权限不足、网络或契约错误不会触发自动重登。需要切换账号时显式执行 `auth login`。
+- `--cached` 是本服务器的显式集成：仅允许默认 `/home/hermes/.config/nwctl` 下的 `prod` profile、精确生产 origin，通过 `/usr/bin/sudo -n /usr/local/sbin/nwctl-prod-login` 读取已有 root 私有缓存。不会放宽凭据文件权限、复制长期 Key 到 CLI 配置、查询 D1 取 Key，或执行 profile 提供的任意命令。该 helper 必须由管理员独立部署；其他主机使用交互/受控 stdin，不会自动寻找密钥。`--cached` 不能和 `--credentials-stdin` 同用。
+- 缓存 helper 超时上限独立为 180 秒；`--timeout` 限制每个 HTTP 请求，以及服务端退出后的验证阶段，不是整条复合命令的总时长。helper 输出不直接透传，CLI 会重新向服务端核验保存的会话。
+- `status` 展示实例、API、身份、会话剩余秒数、用户数和备份概况。未登录或普通用户时管理数据为 unknown/null，不能视为健康；网络/契约错误明确失败。`--check` 仅在有效管理员会话且全部目标满足新鲜度条件时通过，否则退出 7。健康只表示这些观测条件，不证明备份能恢复或数据库/Cloudflare 全面正常。
+- `devices list` 仅显示本账号的设备 ID、名称、类型、创建/活动时间、信任标记和 `current`；不输出设备包装密钥。
+- `auth logout --server` 要求当前有效、设备绑定匹配的会话，不接受设备 ID 或全设备参数。对唯一目标发出一次 DELETE 后，用旧 access token 探测 `/api/accounts/profile`，观察到 401 才报告 `oldAccessRejected: true`。后端跨实例缓存可能短暂滞后；可提高 `--timeout`，但不能把单路径验证说成全球所有节点同步失效。DELETE 一旦发出，无论成功、超时或回包不兼容都会清除本地会话；不会自动重试 DELETE。若删除/验证失败，退出非零且不声称服务端撤销成功。API Key 本身不变，其他设备不变；同 profile 的其他 CLI 进程可能同时被退出。
+- 普通 `auth logout` 仍只清本地文件。如果令牌已过期/会话已丢失，不能凭本地设备名做未经验证的删除；通过可信网页客户端管理设备。
+- 审计支持 `--category`、`--level`、`--query`、`--from`、`--to`；时间必须包含秒数和明确时区，校验真实日期和起止顺序后转为 UTC 毫秒格式发送。类别/级别为小写标识符（最多 64 字符），关键词 1–512 字符且无控制符，不要在关键词中传秘密。仍保留 `--limit`、`--offset` 和 metadata 脱敏边界；分页在活跃日志下可能变化，不是稳定快照。
+
 ## 安全和权限边界
 
 - 客户端只读 **不等于服务端只读授权**。个人 API Key 和 access token 代表原账号权限；管理员 Token 被盗仍有风险。不要默认交给 Agent 或长驻脚本。
@@ -61,7 +88,7 @@ nwctl auth logout
 
 ## 输出、检查与故障
 
-全局参数可放在子命令前后：`--profile NAME`、`--json`、`--config-dir DIR`、`--timeout MS`（50–120000，默认 15000）。不接受任意 API 请求或业务写端点。
+全局参数可放在子命令前后：`--profile NAME`、`--json`、`--config-dir DIR`、`--timeout MS`（50–120000，默认 15000）。不接受任意 API 请求或业务写端点；唯一新增 DELETE 是经 JWT/profile 绑定核验的专属 CLI 设备退出。
 
 JSON stdout 只有一个文档：`schemaVersion: 1`、`ok`、`command`、`profile`、`data`、`warnings`；错误使用 `error.code/message/exitCode/httpStatus`。提示走 stderr。分页返回 `items/count/total/limit/offset/hasMore`；`count` 是本页数量，不是所有日志。只浏览指定远端目录，不自动递归、下载或校验。
 
@@ -79,7 +106,7 @@ JSON stdout 只有一个文档：`schemaVersion: 1`、`ok`、`command`、`profil
 
 退出码：0 成功；2 参数/不安全存储；3 未登录/过期/认证被拒；4 权限不足；5 网络/TLS/超时/服务端错误；6 响应不兼容或 HTTP 409 业务冲突；7 健康检查未通过；130 中断。
 
-GET 最多重试一次（429、502/503/504），尊重 Retry-After 且等待不超过 2 秒、总请求不超过 timeout；POST 不自动重试。响应上限 2 MiB。HTML 登录页、不兼容字段和跨 origin 跳转明确失败，不伪造空列表。
+GET 最多重试一次（429、502/503/504），尊重 Retry-After 且等待不超过 2 秒、总请求不超过 timeout；POST/DELETE 不自动重试。响应上限 2 MiB。HTML 登录页、不兼容字段和跨 origin 跳转明确失败，不伪造空列表。
 
 ## 开发和验证
 
@@ -101,4 +128,4 @@ CI 只保留一条 Linux 验证：在 `main` 源码推送、面向 `main` 的 PR
 
 ## 明确不包含
 
-备份运行/设置修改、远端删除/下载/恢复、完整导出、用户写操作、密码库解密、API Key 创建/轮换、生产部署、R2 迁移及无人值守写授权。第二阶段需单独批准。
+备份运行/设置修改、远端删除/下载/恢复、完整导出、用户写操作、密码库解密、API Key 创建/轮换、生产部署、R2 迁移及无人值守写授权。上述后续能力仍需单独批准；本版没有加入备份写操作、审计全量导出或自动定时任务。

@@ -26,7 +26,7 @@ export function doctor(program: Command, c: Context) {
         }
         c.print(
           {
-            cliVersion: "0.1.0",
+            cliVersion: "0.2.0",
             server: p.server,
             transport:
               p.allowLoopback && p.server.startsWith("http:")

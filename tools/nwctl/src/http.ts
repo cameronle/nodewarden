@@ -4,6 +4,7 @@ const reads = new Set([
   "/api/config",
   "/api/version",
   "/api/accounts/profile",
+  "/api/devices",
   "/api/admin/backup/settings",
   "/api/admin/backup/remote",
   "/api/admin/users",
@@ -61,15 +62,35 @@ export class Client {
   postForm(path: string, form: Record<string, string>) {
     return this.request("POST", path, {}, new URLSearchParams(form));
   }
+  revokeDevice(device: string, token: string) {
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+        device,
+      )
+    )
+      invalid("Invalid dedicated device identifier.");
+    return this.request(
+      "DELETE",
+      "/api/devices/" + device,
+      {},
+      undefined,
+      token,
+    );
+  }
   private async request(
-    method: "GET" | "POST",
+    method: "GET" | "POST" | "DELETE",
     path: string,
     query: Record<string, string>,
     body?: URLSearchParams,
     token?: string,
   ): Promise<unknown> {
-    if (!(method === "GET" ? reads : posts).has(path))
-      invalid("Endpoint is not in the read-only API allowlist.");
+    const allowed =
+      method === "DELETE"
+        ? /^\/api\/devices\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+            path,
+          )
+        : (method === "GET" ? reads : posts).has(path);
+    if (!allowed) invalid("Endpoint is not in the operations API allowlist.");
     const url = new URL(path, this.origin);
     for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
     rememberSecret(token);

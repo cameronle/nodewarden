@@ -1,8 +1,8 @@
 {
   "name": "nodewarden-ops-cli",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
-  "description": "Read-only NodeWarden operations CLI",
+  "description": "NodeWarden operations CLI with scoped session lifecycle",
   "license": "LGPL-3.0",
   "type": "module",
   "engines": {

@@ -38,6 +38,19 @@ export async function workerFixture() {
   const mock = createFetchMock();
   mock.disableNetConnect();
   mock
+    .get("https://identity.bitwarden.com")
+    .intercept({ path: "/connect/token", method: "POST" })
+    .reply(
+      200,
+      JSON.stringify({ access_token: "fixture-push-access", expires_in: 3600 }),
+    )
+    .persist();
+  mock
+    .get("https://push.bitwarden.com")
+    .intercept({ path: "/push/delete", method: "POST" })
+    .reply(200, "{}")
+    .persist();
+  mock
     .get("https://api.bitwarden.com")
     .intercept({ path: "/installations", method: "POST" })
     .reply(
