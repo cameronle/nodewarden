@@ -1,3 +1,4 @@
+import { backupConfiguration } from "../configuration.js";
 import type { Command } from "commander";
 import { Context } from "../context.js";
 import { settings, remotePage } from "../contracts.js";
@@ -57,6 +58,7 @@ export function backups(program: Command, c: Context) {
         if (opts.check && !result.healthy) process.exitCode = 7;
       }),
     );
+  backupConfiguration(group, c);
   const remote = group
     .command("remote")
     .description("List or request approved archive operations");

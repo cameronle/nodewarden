@@ -1,9 +1,10 @@
+import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 export async function cli(
   dir: string,
   args: string[],
   input?: string,
-  bin = "bin/nwctl.mjs",
+  bin = fileURLToPath(new URL("../../bin/nwctl.mjs", import.meta.url)),
 ) {
   return new Promise<{
     code: number | null;

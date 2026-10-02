@@ -1,6 +1,6 @@
 # nwctl — NodeWarden 运维 CLI
 
-`nwctl` 管理实例运维信息，**不是密码库客户端**。密码库条目、解密与同步仍使用官方 Bitwarden `bw`。本包属于 Fork 的独立工具。0.3.0 新增精确设备管理、邀请管理，以及网页一次性授权后的备份运行、远端下载与校验。不会部署 Worker、修改备份配置、删除远端文件或用户。密码库和 R2 附件不迁移。
+`nwctl` 管理实例运维信息，**不是密码库客户端**。密码库条目、解密与同步仍使用官方 Bitwarden `bw`。本包属于 Fork 的独立工具。0.4.0 新增网页一次性授权后的备份目标/计划配置、审计策略/快照清空与用户封禁/解封；保留 0.3.0 设备、邀请和备份运行/下载/校验。不会部署 Worker、删除远端文件或删除用户。密码库和 R2 附件不迁移。
 
 ## 安装
 
@@ -14,14 +14,14 @@ node bin/nwctl.mjs --help
 npm pack
 ```
 
-将生成的 `nodewarden-ops-cli-0.3.0.tgz` 带到任何有 Node.js 的干净目录：
+将生成的 `nodewarden-ops-cli-0.4.0.tgz` 带到任何有 Node.js 的干净目录：
 
 ```sh
-npm install /absolute/path/nodewarden-ops-cli-0.3.0.tgz
+npm install /absolute/path/nodewarden-ops-cli-0.4.0.tgz
 ./node_modules/.bin/nwctl --version
 ```
 
-`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.3.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
+`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.4.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
 
 ## 开始使用
 
@@ -45,6 +45,38 @@ nwctl auth logout
 ```
 
 在受控本地终端输入个人 `client_id` 与 `client_secret`，**两项均隐藏输入**。不要把 Secret、主密码或 Token 贴进聊天或写在命令行参数。CLI 不获取 API Key、不创建 Key、不请求主密码。非 TTY 默认拒绝登录；确需受控管道时使用 `auth login --apikey --credentials-stdin`，stdin 必须是客户端 ID 与 API Secret 两行，由安全凭据工具提供，不能在 shell 历史里写明文。
+
+## 0.4.0：配置与账号管理
+
+```sh
+nwctl backup destinations add NEW_ID --file /私有目录/target.json --dry-run
+nwctl backup destinations add NEW_ID --file /私有目录/target.json --yes
+nwctl backup destinations update EXISTING_ID --file /私有目录/change.json --yes
+nwctl backup destinations remove TARGET_ID --yes
+nwctl backup schedule show TARGET_ID
+nwctl backup schedule set TARGET_ID --enabled true --interval-hours 12 --start-time 03:00 --timezone Asia/Shanghai --retention 7 --include-attachments false --yes
+nwctl audit settings set --retention-days 30 --yes
+nwctl audit settings set --max-entries 1000 --yes
+nwctl audit settings set --retention-days none --yes
+nwctl audit clear --dry-run
+nwctl audit clear --yes
+nwctl users ban EXACT_USER_ID --dry-run
+nwctl users ban EXACT_USER_ID --yes
+nwctl users unban EXACT_USER_ID --yes
+```
+
+这些写命令只创建待批准请求，仍需可信网页确认，再 `nwctl ops execute REQUEST_ID --yes`；`--yes` 不绕过二验。配置读取/预览不初始化或重新加密备份配置。
+
+- 新增/编辑私有 JSON 必须是当前用户所有的 **0600、单硬链接普通文件**，最多 8192 字节，拒绝路径里的符号链接。外层只允许 `change` 和可选 `credentials`。凭据不能放进 `change.destination`、argv、终端输出或聊天。
+- 非秘密示例：`{"change":{"name":"新名称","schedule":{"enabled":false,"timezone":"Asia/Shanghai","retentionCount":7}}}`。新目标还必须在 `change` 指定 `type`、`name` 和 `destination`；默认附件不包含、计划禁用。
+- WebDAV `change.destination` 支持 `baseUrl`、`remotePath`；`credentials` 支持 `username`、`password`。S3 支持 `endpoint`、`bucket`、`addressingStyle`、`region`、`rootPath`；凭据字段为 `accessKeyId`、`secretAccessKey`。新目标必须提供完整凭据；更新未提供的字段原样保留。Endpoint 要求 HTTPS，无 URL 用户信息、查询串或 fragment，并复用服务端内网地址限制。Provider 类型不允许原地转换。
+- `credentials` 仅在内存及 HTTPS 请求中传输，待授权 payload 用独立 HKDF/AES-GCM、随机 IV 和请求/账号/action AAD 加密；网页/本地操作缓存只含更换字段名称。成功、失败、取消、拒绝时清除暂存 ciphertext，正式设置沿用 runtime + portable 加密信封。**输入 JSON 是用户提供的明文私有文件**，CLI 不代替用户自动删除；用完后按本地凭据流程处置。
+- 配置级 revision + 原子 CAS 阻止旧请求覆盖并发修改；网页批准和执行都检查目标。备份配置只改指定目标，不覆盖热运行状态，不联系远端、不立即运行备份，也不删除已有归档/R2。减少保留数量的删除影响在后续备份运行时发生。
+- `--interval-hours` 为 1–99；`--start-time` 必须规范 `HH:mm`；`--retention` 为 1–1000 或 `none`；布尔值显式 `true/false`。IANA 时区无效则拒绝，不猜测修正。
+- 审计策略沿用网页互斥模式：天数 7/30/90/180/365、条数 1000/5000/10000/50000，或 `none` 永久保留。**保存立即且不可逆地清理超出策略的日志**；CAS 失败不执行清理。`audit clear` 只清创建请求时审阅的 rowid 快照，保留之后产生的日志和自身审计记录；不是“执行时全部清空”，不应以总行数为零验收。
+- 用户只按精确 ID 操作，禁止改变请求账号自身状态；封禁/解封都轮换 session stamp、清刷新令牌，解封需要重新登录，不复活旧会话。当前 Worker 本地鉴权缓存失效，其他 isolate 的缓存可能短暂滞后。不会删除密码库密文、用户 Key 或 R2 附件。
+- 写后再次 GET 并比对准确 committed revision/目标值才报告 `verified: true`；审计清空核对快照剩余数为零。HTTP 成功不等于完成；并发变化导致核验失败时不自动重试。
+- 需要配套 **0.4.0 Worker**，不降级到跳过二验的旧管理接口。备份设置修复涉及浏览器持有的管理员私钥，继续留在可信 Web 客户端，本轮不把私钥/主密码搬进 CLI。
 
 ## 0.3.0：网页操作进入 CLI
 
@@ -132,6 +164,7 @@ JSON stdout 只有一个文档：`schemaVersion: 1`、`ok`、`command`、`profil
 `doctor` 分开显示 CLI 版本和 Bitwarden `compatibilityVersion`；未证明的 NodeWarden 版本与部署 SHA 显示 `unknown`。它不是恢复、数据库或 Cloudflare 全面巡检。
 
 `backup status` 保留各目标计划、时区、ISO 时间及大小：
+
 - `disabled`：计划未启用。
 - `never-succeeded`：从未成功。
 - `failed`：错误不早于最近成功。
@@ -167,4 +200,4 @@ CI 只保留一条 Linux 验证：在 `main` 源码推送、面向 `main` 的 PR
 
 ## 明确不包含
 
-备份设置修改、远端删除/恢复、完整附件导出、用户写操作、密码库解密、API Key 创建/轮换、生产部署命令、R2 迁移及无人值守二验授权。不实现全量审计导出或自动定时任务。Passkey 二次确认不包含在首版；必须在网页输入主密码，未知 KDF 明确拒绝。
+备份设置密钥修复、远端删除/恢复、完整附件导出、用户删除、密码库解密、API Key 创建/轮换、生产部署命令、R2 迁移及无人值守二验授权。不实现全量审计导出或自动定时任务。Passkey 二次确认不包含在首版；必须在网页输入主密码，未知 KDF 明确拒绝。

@@ -1,3 +1,4 @@
+import { userStatus } from "../configuration.js";
 import type { Command } from "commander";
 import { Context } from "../context.js";
 import { usersPage, record, text, identity } from "../contracts.js";
@@ -6,7 +7,8 @@ import { identifier } from "../mutations.js";
 export function users(program: Command, c: Context) {
   const group = program
     .command("users")
-    .description("Read-only user management inspection");
+    .description("User metadata and browser-approved ban/unban");
+  userStatus(group, c);
   group.command("show <id>").action(
     c.action("users show", async (id) => {
       identifier(id);
