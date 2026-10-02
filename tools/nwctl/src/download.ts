@@ -1,3 +1,4 @@
+import { inspectBackupBytes } from "../../../shared/backup-inspection.js";
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { Client } from "./http.js";
@@ -21,6 +22,7 @@ export async function downloadOperation(
     timer = setTimeout(() => controller.abort(), client.timeout);
   const max = 64 * 1024 * 1024;
   let response: Response | undefined;
+  const instanceChunks: Uint8Array[] | null = remotePath === "" ? [] : null;
   try {
     response = await fetch(client.origin + `/api/ops/requests/${id}/execute`, {
       method: "POST",
@@ -85,6 +87,7 @@ export async function downloadOperation(
           prefix,
           Buffer.from(value).subarray(0, 4 - prefix.length),
         ]);
+      instanceChunks?.push(value);
       hash.update(value);
       await file.write(value);
     }
@@ -106,6 +109,17 @@ export async function downloadOperation(
         "Filename checksum prefix mismatch; no output committed.",
         6,
       );
+    if (instanceChunks) {
+      try {
+        inspectBackupBytes(Buffer.concat(instanceChunks));
+      } catch {
+        throw new CliError(
+          "INVALID_ARCHIVE",
+          "Fresh export failed full ZIP/CRC/metadata/attachment validation; no output committed.",
+          6,
+        );
+      }
+    }
     await file.commit();
     const saved = createHash("sha256");
     for await (const chunk of createReadStream(file.path)) saved.update(chunk);
@@ -121,6 +135,9 @@ export async function downloadOperation(
       sha256,
       localReadbackVerified: true,
       filenameChecksumVerified: !!expected,
+      ...(instanceChunks
+        ? { structureValidated: true, crcVerified: true }
+        : {}),
       recoverabilityVerified: false,
     };
   } catch (e) {

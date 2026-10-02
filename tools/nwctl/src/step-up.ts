@@ -1,3 +1,4 @@
+import { verifyBulk } from "./bulk.js";
 import { verifyConfiguration } from "./configuration.js";
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
@@ -183,13 +184,17 @@ export function operations(program: Command, c: Context) {
         );
       const output = opts.output ?? op.output;
       if (
-        ["invite.create", "backup.download"].includes(parsed.action) &&
+        ["invite.create", "backup.download", "backup.export"].includes(
+          parsed.action,
+        ) &&
         typeof output !== "string"
       )
         invalid("This operation requires a private --output file.");
       if (
         output &&
-        !["invite.create", "backup.download"].includes(parsed.action)
+        !["invite.create", "backup.download", "backup.export"].includes(
+          parsed.action,
+        )
       )
         invalid("This operation does not produce a file.");
       if (output) await validateOutput(output);
@@ -202,7 +207,10 @@ export function operations(program: Command, c: Context) {
         }))
       )
         return;
-      if (parsed.action === "backup.download") {
+      if (
+        parsed.action === "backup.download" ||
+        parsed.action === "backup.export"
+      ) {
         const session = await c.store().session(p);
         const result = await downloadOperation(
           new Client(p.server, p.allowLoopback, operationTimeout),
@@ -210,14 +218,19 @@ export function operations(program: Command, c: Context) {
           proof,
           session.token,
           output as string,
-          parsed.parameters.path!,
+          parsed.parameters.path ?? "",
         );
         c.print({ id, action: parsed.action, ...result }, [
-          "ZIP may reference separate attachment blobs. Download and filename checksum do not prove recoverability.",
+          parsed.action === "backup.export"
+            ? "Fresh instance export with the approved attachment policy; no vault decryption. Hash/read-back are not a restore rehearsal."
+            : "ZIP may reference separate attachment blobs. Download and filename checksum do not prove recoverability.",
         ]);
         return;
       }
       const file = output ? await privateOutput(output) : null;
+      const selfRemoval =
+        parsed.action === "device.remove" &&
+        parsed.parameters.targets!.some((t) => t.id === p.device);
       try {
         const result = await write(
           c,
@@ -267,6 +280,28 @@ export function operations(program: Command, c: Context) {
               6,
             );
           c.print({ id, action: parsed.action, verified: true });
+        } else if (
+          parsed.action === "device.remove" ||
+          parsed.action === "device.revoke-trust" ||
+          parsed.action === "invite.prune"
+        ) {
+          c.print(
+            {
+              id,
+              ...(await verifyBulk(
+                c,
+                parsed.action,
+                parsed.parameters,
+                result,
+                operationTimeout,
+              )),
+            },
+            parsed.action === "device.remove"
+              ? [
+                  "Access-token caches on other Worker isolates may lag up to 15 seconds.",
+                ]
+              : [],
+          );
         } else if (
           [
             "backup.configure",
@@ -366,6 +401,7 @@ export function operations(program: Command, c: Context) {
         }
       } finally {
         await file?.abort();
+        if (selfRemoval) await c.store().logout(p);
       }
     }),
   );
