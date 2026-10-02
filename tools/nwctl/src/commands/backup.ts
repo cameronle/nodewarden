@@ -1,3 +1,4 @@
+import { inspectArchive } from "../backup-inspection.js";
 import { backupConfiguration } from "../configuration.js";
 import type { Command } from "commander";
 import { Context } from "../context.js";
@@ -57,6 +58,32 @@ export function backups(program: Command, c: Context) {
         c.print(result);
         if (opts.check && !result.healthy) process.exitCode = 7;
       }),
+    );
+  mutationOptions(
+    group
+      .command("export")
+      .requiredOption("--output <file>", "Private ZIP output; no overwrite")
+      .option(
+        "--include-attachments",
+        "Include original encrypted attachment blobs",
+        false,
+      ),
+  ).action(
+    c.action("backup export", async (opts) => {
+      await requestOperation(c, opts, "backup.export", {
+        includeAttachments: opts.includeAttachments,
+      });
+    }),
+  );
+  group
+    .command("inspect")
+    .requiredOption(
+      "--file <file>",
+      "Owned private ZIP; never uploads archive or restores",
+    )
+    .option("--compare-instance", "Read only target replacement-risk counts")
+    .action(
+      c.action("backup inspect", async (opts) => inspectArchive(c, opts)),
     );
   backupConfiguration(group, c);
   const remote = group

@@ -29,17 +29,20 @@ test("unknown commands and flags return JSON errors without echoing argv", () =>
     assert.ok(!r.stderr.includes("bad-secret"));
   }
 });
-test("every supported command has help; destructive restore/export/delete stay absent", () => {
+test("every supported command has help; production restore/import/delete stay absent", () => {
   for (const args of [
     ["profile"],
     ["auth"],
     ["doctor"],
     ["status"],
+    ["devices", "remove-batch"],
+    ["devices", "revoke-trust-batch"],
     ["devices", "list"],
     ["devices", "show"],
     ["devices", "rename"],
     ["devices", "revoke-trust"],
     ["devices", "remove"],
+    ["invites", "prune"],
     ["invites", "list"],
     ["invites", "create"],
     ["invites", "revoke"],
@@ -73,5 +76,5 @@ test("every supported command has help; destructive restore/export/delete stay a
     assert.equal(r.status, 0, r.stderr);
   }
   const r = run("backup", "--help");
-  assert.doesNotMatch(r.stdout, /restore|export|delete/);
+  assert.doesNotMatch(r.stdout, /restore|import|delete/);
 });

@@ -1,3 +1,4 @@
+import { pruneInvites } from "../bulk.js";
 import type { Command } from "commander";
 import { Context } from "../context.js";
 import { invitationRows, invitationMetadata } from "../invites.js";
@@ -10,6 +11,17 @@ export function invites(program: Command, c: Context) {
     .description(
       "Registration invitations; codes omitted from ordinary output",
     );
+  mutationOptions(
+    group
+      .command("prune")
+      .description(
+        "Review up to 50 currently invalid invitations; preserve valid/new invitations.",
+      )
+      .option(
+        "--ids <references...>",
+        "Optional exact non-secret SHA-256 references",
+      ),
+  ).action(c.action("invites prune", async (opts) => pruneInvites(c, opts)));
   group.command("list").action(
     c.action("invites list", async () => {
       const items = invitationMetadata(await invitationRows(c));

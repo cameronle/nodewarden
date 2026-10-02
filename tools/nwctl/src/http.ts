@@ -3,6 +3,9 @@ import { rememberSecret, learnSecrets } from "./output.js";
 const reads = new Set([
   "/api/config",
   "/api/ops/config/backup",
+  "/api/ops/bulk/devices",
+  "/api/ops/bulk/invites",
+  "/api/ops/bulk/restore-preflight",
   "/api/ops/config/audit",
   "/api/ops/config/audit-clear",
   "/api/version",

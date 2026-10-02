@@ -7,7 +7,11 @@ const require = createRequire(repo + "package.json");
 const { Miniflare, createFetchMock, Log, LogLevel } = require("miniflare");
 const { build } = require("esbuild");
 export async function workerFixture(
-  options: { backupOperations?: boolean } = {},
+  options: {
+    backupOperations?: boolean;
+    restoreDrill?: boolean;
+    ambiguousSelfLogout?: boolean;
+  } = {},
 ) {
   const secret = randomBytes(32).toString("base64url"),
     jwt = randomBytes(48).toString("base64url");
@@ -17,15 +21,19 @@ export async function workerFixture(
       contents: `
   import worker,{NotificationsHub,BackupTransferRunner} from './src/index.ts';
   import {StorageService} from './src/services/storage.ts';
+  import {importBackupArchiveBytes} from './src/services/backup-import.ts';
   import {saveBackupSettings,loadBackupSettings} from './src/services/backup-config.ts';
   import {AuthService} from './src/services/auth.ts';
   export {NotificationsHub,BackupTransferRunner};
   export default {async fetch(request,env,ctx) {
    const path=new URL(request.url).pathname;
+   if(path==='/__fixture/restore' && ${!!options.restoreDrill}) {const actor=await env.DB.prepare("SELECT id FROM users LIMIT 1").first();try{const result=await importBackupArchiveBytes(new Uint8Array(await request.arrayBuffer()),env,actor.id,false);return new Response(JSON.stringify(result.result),{headers:{"Content-Type":"application/json"}});}catch(e){return new Response(JSON.stringify({error:"isolated restore failed"}),{status:400});}}
    if(path==='/__fixture/settings') {const s=new StorageService(env.DB);await saveBackupSettings(s,env,await request.json());return new Response('{}');}
    if(path==='/__fixture/rename-destination') {const s=new StorageService(env.DB),settings=await loadBackupSettings(s,env,'UTC');settings.destinations[0].name='Changed destination';await saveBackupSettings(s,env,settings);return new Response('{}');}
    if(path==='/__fixture/device') {const {user,device}=await request.json();await new StorageService(env.DB).deleteDevice(user,device);AuthService.invalidateDeviceCache(user,device);return new Response('{}');}
-   return worker.fetch(request,env,ctx);
+   const response=await worker.fetch(request,env,ctx);
+   if(${!!options.ambiguousSelfLogout} && path.startsWith('/api/ops/requests/') && path.endsWith('/execute') && response.ok && response.headers.get('Content-Type')?.includes('application/json')){const body=await response.clone().json();if(body.action==='device.remove' && body.currentRemoved)return new Response('{}',{status:502});}
+   return response;
   }};`,
       resolveDir: repo,
       sourcefile: "nwctl-isolated-fixture.ts",
@@ -306,6 +314,7 @@ export async function workerFixture(
       secret,
       jwt,
       snapshot,
+      r2,
       remoteFiles,
       invalidateDevice: async (user: string, device: string) => {
         const r = await fetch(url + "/__fixture/device", {

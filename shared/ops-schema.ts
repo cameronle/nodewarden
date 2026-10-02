@@ -1,3 +1,4 @@
+import { bulkParameters, type BulkTarget } from "./ops-bulk-schema.js";
 import {
   configurationParameters,
   type ConfigurationParameters,
@@ -5,9 +6,13 @@ import {
 export type OpsAction =
   | "invite.create"
   | "invite.revoke"
+  | "invite.prune"
   | "backup.run"
   | "backup.download"
   | "backup.verify"
+  | "backup.export"
+  | "device.remove"
+  | "device.revoke-trust"
   | "backup.configure"
   | "audit.configure"
   | "audit.clear"
@@ -15,6 +20,9 @@ export type OpsAction =
 export interface OpsParameters extends ConfigurationParameters {
   expiresInHours?: number;
   inviteId?: string;
+  targets?: BulkTarget[];
+  includeCurrent?: boolean;
+  includeAttachments?: boolean;
   destinationId?: string;
   path?: string;
 }
@@ -22,6 +30,8 @@ export function opsParameters(
   action: unknown,
   value: unknown,
 ): { action: OpsAction; parameters: OpsParameters } {
+  const bulk = bulkParameters(action, value);
+  if (bulk) return bulk;
   const configured = configurationParameters(action, value);
   if (configured) return configured;
   const fail = (): never => {
@@ -33,6 +43,14 @@ export function opsParameters(
   const exact = (keys: string[]) =>
     Object.keys(p).length === keys.length &&
     keys.every((k) => Object.hasOwn(p, k));
+  if (action === "backup.export") {
+    if (
+      !exact(["includeAttachments"]) ||
+      typeof p.includeAttachments !== "boolean"
+    )
+      return fail();
+    return { action, parameters: { includeAttachments: p.includeAttachments } };
+  }
   if (action === "invite.create") {
     if (
       !exact(["expiresInHours"]) ||

@@ -1,4 +1,11 @@
 import type { Env, User } from "./types";
+import { exportTarget } from "./services/ops-export";
+import { restorePreflightMetadata } from "./services/ops-restore-preflight";
+import {
+  invitePruneMetadata,
+  invitePruneTarget,
+} from "./services/ops-invite-prune";
+import { bulkMetadata, bulkTarget, isBulk } from "./services/ops-bulk";
 import {
   configurationMetadata,
   configurationTarget,
@@ -154,7 +161,14 @@ async function target(
   p: OpsParameters,
   actor: User,
   secretValue?: unknown,
+  currentDevice?: string,
 ) {
+  if (action === "invite.prune") {
+    if (!currentDevice) return fail(401, "Creator device required");
+    return invitePruneTarget(env, actor, p, currentDevice);
+  }
+  if (isBulk(action)) return bulkTarget(env, actor, action, p, currentDevice!);
+  if (action === "backup.export") return exportTarget(env, p);
   if (isConfiguration(action))
     return configurationTarget(env, actor, action, p, secretValue);
   const storage = new StorageService(env.DB);
@@ -287,6 +301,15 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (origin && origin !== url.origin)
       fail(403, "Cross-origin operation rejected");
     const ctx = await freshContext(request, env);
+    if (
+      url.pathname === "/api/ops/bulk/restore-preflight" &&
+      request.method === "GET"
+    )
+      return jsonResponse(await restorePreflightMetadata(env));
+    if (url.pathname === "/api/ops/bulk/invites" && request.method === "GET")
+      return jsonResponse(await invitePruneMetadata(env));
+    if (url.pathname === "/api/ops/bulk/devices" && request.method === "GET")
+      return jsonResponse(await bulkMetadata(env, ctx.user));
     if (url.pathname.startsWith("/api/ops/config/")) {
       if (request.method !== "GET")
         return errorResponse("Method not allowed", 405);
@@ -336,6 +359,7 @@ async function route(request: Request, env: Env): Promise<Response> {
           parsed.parameters,
           ctx.user,
           secretValue,
+          ctx.device.deviceIdentifier,
         ),
         now = Date.now();
       const expires = Math.min(now + 600000, ctx.claims.exp * 1000);
@@ -462,6 +486,7 @@ async function route(request: Request, env: Env): Promise<Response> {
           JSON.parse(row.parameters),
           ctx.user,
           await openOpsCredentials(env, row.id, row.user_id, row.payload),
+          row.device_id,
         );
         if (resolved.fingerprint !== row.fingerprint)
           fail(409, "Target changed; create a new request");
@@ -518,6 +543,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       JSON.parse(row.parameters),
       ctx.user,
       await openOpsCredentials(env, row.id, row.user_id, row.payload),
+      row.device_id,
     );
     if (resolved.fingerprint !== row.fingerprint)
       fail(409, "Target changed; create a new request");
@@ -542,6 +568,12 @@ async function route(request: Request, env: Env): Promise<Response> {
         "apply" in resolved
           ? await resolved.apply(row.id)
           : await execute(env, ctx.user, row, request, resolved.inviteCode);
+      if (
+        row.action === "backup.export" &&
+        response.ok &&
+        response.headers.get("X-Nwctl-Stream") === "1"
+      )
+        return response;
       await env.DB.prepare(
         "UPDATE ops_requests SET state=?,payload=NULL WHERE id=? AND state='executing'",
       )
