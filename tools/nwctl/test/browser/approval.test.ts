@@ -10,7 +10,7 @@ const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const require = createRequire(repo + "package.json");
 test(
   "real Chromium approval page: desktop/mobile, wrong password, approval, denial and expiry",
-  { timeout: 120000 },
+  { timeout: 180000 },
   async () => {
     const cwd = process.cwd();
     process.chdir(repo);
@@ -119,6 +119,7 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
         }),
         errors: string[] = [];
       page.on("pageerror", (e: Error) => errors.push(e.message));
+
       let op = await make();
       await page.goto(origin + "/cli-approval/" + op.id);
       await page.locator("input[type=password]").first().waitFor();
@@ -186,7 +187,7 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
         assert.equal(r.status, 200);
         return r.json() as Promise<any>;
       };
-      const untouched = await f.snapshot();
+
       const config = await read("/api/ops/config/backup"),
         policy = await read("/api/ops/config/audit"),
         user = await read("/api/ops/config/user/" + f.ids.user);
@@ -232,7 +233,111 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
           },
         ],
       ];
-      for (const width of [1280, 390])
+      const deviceTime = new Date().toISOString();
+      for (let i = 0; i < 50; i++) {
+        const id = crypto.randomUUID();
+        await f.db
+          .prepare(
+            "INSERT INTO devices(user_id,device_identifier,name,type,session_stamp,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+          )
+          .bind(
+            f.ids.admin,
+            id,
+            "Long reviewed device " + i,
+            8,
+            "fixture-session-stamp-" + i,
+            deviceTime,
+            deviceTime,
+          )
+          .run();
+        await f.db
+          .prepare(
+            "INSERT INTO trusted_two_factor_device_tokens(token,user_id,device_identifier,expires_at) VALUES(?,?,?,?)",
+          )
+          .bind(
+            "fixture-browser-trust-" + i,
+            f.ids.admin,
+            id,
+            Date.now() + 86400000,
+          )
+          .run();
+        await f.db
+          .prepare(
+            "INSERT INTO invites(code,created_by,used_by,expires_at,status,created_at,updated_at) VALUES(?,?,?,?,?,?,?)",
+          )
+          .bind(
+            "fixture-browser-used-code-" + i,
+            f.ids.admin,
+            f.ids.user,
+            deviceTime,
+            "used",
+            deviceTime,
+            deviceTime,
+          )
+          .run();
+      }
+      const deviceMetadata = await read("/api/ops/bulk/devices"),
+        inviteMetadata = await read("/api/ops/bulk/invites");
+      const deviceTargets = deviceMetadata.items
+        .filter((v: any) => v.name !== "Browser fixture")
+        .map((v: any) => ({ id: v.id, revision: v.revision }));
+      const inviteTargets = inviteMetadata.items.map((v: any) => ({
+        id: v.id,
+        revision: v.revision,
+      }));
+      assert.equal(deviceTargets.length, 50);
+      assert.equal(inviteTargets.length, 50);
+      scenarios.push(
+        ["backup.export", { includeAttachments: true }],
+        ["device.remove", { targets: deviceTargets, includeCurrent: false }],
+        [
+          "device.revoke-trust",
+          { targets: deviceTargets, includeCurrent: false },
+        ],
+        ["invite.prune", { targets: inviteTargets }],
+      );
+      const untouched = await f.snapshot();
+      for (const width of [1280, 390]) {
+        if (width === 390) {
+          // More scenarios now cross the real 10-attempt approval budget. Prove
+          // the ceiling, then wait for its genuine fixed-window expiry; never
+          // weaken the production limiter or erase fixture budget rows.
+          const limited = await make();
+          const approve = () =>
+            fetch(origin + "/api/ops/requests/" + limited.id + "/approve", {
+              method: "POST",
+              headers: {
+                Authorization: "Bearer " + token,
+                "Content-Type": "application/json",
+                Origin: origin,
+              },
+              body: JSON.stringify({
+                approve: true,
+                masterPasswordHash: "synthetic-wrong-password",
+              }),
+            });
+          await approve();
+          const bucket = await f.db
+            .prepare(
+              "SELECT bucket_key,expires_at FROM rate_limit_buckets WHERE bucket_key LIKE ? AND expires_at>? ORDER BY expires_at DESC LIMIT 1",
+            )
+            .bind("ops-approve:" + f.ids.admin + ":%", Date.now())
+            .first();
+          assert.ok(bucket);
+          await f.db
+            .prepare(
+              "UPDATE rate_limit_buckets SET count=10 WHERE bucket_key=?",
+            )
+            .bind(bucket.bucket_key)
+            .run();
+          assert.equal((await approve()).status, 429);
+          await new Promise((resolve) =>
+            setTimeout(
+              resolve,
+              Math.max(0, bucket.expires_at - Date.now()) + 200,
+            ),
+          );
+        }
         for (const [action, parameters, credentials] of scenarios) {
           await page.setViewportSize({ width, height: 844 });
           const request = await make(action, parameters, credentials);
@@ -250,12 +355,31 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
           );
           await page.locator("#cli-password").fill(password);
           await page.locator("button[type=submit]").click();
-          await page.locator("[role=status]").waitFor();
+          await page
+            .locator("[role=status]")
+            .waitFor()
+            .catch(async (error: Error) => {
+              console.error(
+                JSON.stringify({
+                  action,
+                  width,
+                  alert: await page
+                    .locator("[role=alert]")
+                    .textContent()
+                    .catch(() => null),
+                  state: await page
+                    .locator("[data-testid=cli-state]")
+                    .textContent(),
+                }),
+              );
+              throw error;
+            });
           assert.equal(
             await page.locator("[data-testid=cli-state]").textContent(),
             "approved",
           );
         }
+      }
       assert.deepEqual(
         await f.snapshot(),
         untouched,

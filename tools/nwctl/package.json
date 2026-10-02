@@ -1,6 +1,6 @@
 {
   "name": "nodewarden-ops-cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "NodeWarden operations CLI with scoped session lifecycle",
   "license": "LGPL-3.0",
@@ -24,12 +24,14 @@
     "test": "node --import tsx --test test/*.test.ts",
     "test:e2e": "node --import tsx --test --test-concurrency=1 test/e2e/*.test.ts",
     "prepack": "npm run build",
+    "restore:drill": "node --import tsx scripts/restore-drill.ts",
     "test:browser": "node --import tsx --test test/browser/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "22.19.15",
     "commander": "15.0.0",
     "esbuild": "0.28.2",
+    "fflate": "0.8.3",
     "playwright-core": "1.63.0",
     "tsx": "4.23.15",
     "typescript": "6.0.3"

@@ -1,10 +1,10 @@
 # nwctl — NodeWarden 运维 CLI
 
-`nwctl` 管理实例运维信息，**不是密码库客户端**。密码库条目、解密与同步仍使用官方 Bitwarden `bw`。本包属于 Fork 的独立工具。0.4.0 新增网页一次性授权后的备份目标/计划配置、审计策略/快照清空与用户封禁/解封；保留 0.3.0 设备、邀请和备份运行/下载/校验。不会部署 Worker、删除远端文件或删除用户。密码库和 R2 附件不迁移。
+`nwctl` 管理实例运维信息，**不是密码库客户端**。密码库条目、解密与同步仍使用官方 Bitwarden `bw`。本包属于 Fork 的独立工具。0.5.0 新增完整实例导出（可选加密附件）、精确快照批量设备登出/记住2FA撤销、失效邀请码清理，以及本地恢复预检和源码环境隔离演练；保留 0.4.0 配置、审计和账号管理。不会部署 Worker、删除远端文件或删除用户。密码库和 R2 附件不迁移。
 
 ## 安装
 
-要求 Node.js **22.12+**。本次生产支持平台为 Linux；macOS 的双行粘贴登录在 CI 中仍超时，尚未完成验收，Windows 未验证。仓库源码安装不需要根目录依赖：
+要求 Node.js **22.12+**。本次生产支持平台为 Linux；macOS 的双行粘贴登录在 CI 中仍超时，尚未完成验收，Windows 未验证。源码构建共享备份格式；先在仓库根目录执行 `npm ci --ignore-scripts`，然后：
 
 ```sh
 cd tools/nwctl
@@ -14,14 +14,14 @@ node bin/nwctl.mjs --help
 npm pack
 ```
 
-将生成的 `nodewarden-ops-cli-0.4.0.tgz` 带到任何有 Node.js 的干净目录：
+将生成的 `nodewarden-ops-cli-0.5.0.tgz` 带到任何有 Node.js 的干净目录：
 
 ```sh
-npm install /absolute/path/nodewarden-ops-cli-0.4.0.tgz
+npm install /absolute/path/nodewarden-ops-cli-0.5.0.tgz
 ./node_modules/.bin/nwctl --version
 ```
 
-`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.4.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
+`private: true` 防止意外 npm publish。本包不公开发布 npm；运维可显式执行 `npm install --global /absolute/path/nodewarden-ops-cli-0.5.0.tgz` 安装到服务器。Commander 随构建产物打包，运行包无 npm 运行时依赖，可在空 npm 缓存下离线安装。运行包仅包含 CLI、文档及许可；测试 Worker、数据库工具和源码不会进入包。
 
 ## 开始使用
 
@@ -45,6 +45,37 @@ nwctl auth logout
 ```
 
 在受控本地终端输入个人 `client_id` 与 `client_secret`，**两项均隐藏输入**。不要把 Secret、主密码或 Token 贴进聊天或写在命令行参数。CLI 不获取 API Key、不创建 Key、不请求主密码。非 TTY 默认拒绝登录；确需受控管道时使用 `auth login --apikey --credentials-stdin`，stdin 必须是客户端 ID 与 API Secret 两行，由安全凭据工具提供，不能在 shell 历史里写明文。
+
+## 0.5.0：完整导出、批量管理和恢复预检
+
+```sh
+nwctl backup export --include-attachments --output /私有目录/instance.zip --dry-run
+nwctl backup export --include-attachments --output /私有目录/instance.zip --yes
+nwctl devices remove-batch --all --dry-run
+nwctl devices remove-batch --ids EXACT_DEVICE_1 EXACT_DEVICE_2 --yes
+nwctl devices revoke-trust-batch --all --yes
+nwctl invites prune --dry-run
+nwctl invites prune --yes
+nwctl invites prune --ids EXACT_SHA256_REFERENCE --yes
+# 仍需在可信 Web 完成一次性主密码批准，然后执行返回的请求：
+nwctl ops execute REQUEST_ID --yes
+# 本地解析，未登录也能使用；不上传归档、不创建审批、不恢复：
+nwctl backup inspect --file /私有目录/instance.zip
+nwctl backup inspect --file /私有目录/instance.zip --compare-instance
+# 可重复真实恢复演练仅在源码 checkout，根目录与 CLI 的 npm ci 完成后：
+cd tools/nwctl
+npm run restore:drill -- --file /私有目录/instance.zip --report /私有目录/drill-report.json
+```
+
+- 需要配套 0.5.0 Worker。完整导出复用现有格式和敏感字段清洗，不含 `users.api_key`、设备、会话或单次授权。包含密码验证数据、用户密钥包裹值和其他高敏感备份数据：ZIP **不是整体再加密的归档**，即使 vault/附件仍是密文，也必须按敏感备份保护。
+- `--include-attachments` 才把原始加密附件嵌入 ZIP；省略时不备份附件行/blob，不能声称完整附件恢复。源 R2/KV 只读，不改绑定、不迁移、不触发远端备份或保留清理。记录/附件缺失、长度或大小超限直接失败，不能交付缺附件的“完整备份”。全包及展开上限 64 MiB、db.json 32 MiB、条目 10000；Worker/账户自身资源配额仍可能使大导出失败。
+- 一次性授权绑定内容快照；审批前/执行前源记录变更需重新审阅。导出流仅成功完成时标记成功，异常/取消标记失败；传输不重试。CLI 校验完整中央目录、CRC、元数据计数、关系和附件长度后，才原子发布 **0600** 文件，拒绝覆盖/符号链接，保存后 SHA-256 回读。结构检查不是保险库解锁或生产可恢复性证明。
+- 设备仅管理当前管理员本人；每批最多 50 个精确 ID/revision，其他账号和审批后新增设备不受影响。`--all` 默认排除当前 CLI；显式 `--ids CURRENT --include-current` 才允许批准当前退出。撤销设备同步清该设备 refresh/记住2FA，保留用户和 vault。当前设备一旦尝试执行，无论回执/核验是否成功都会清本地会话；其他 Worker isolate 的访问缓存仍可能滞后 15 秒。
+- `revoke-trust-batch` 只撤销记住2FA令牌，不删会话或包裹密钥。`--include-current` 在这个动作中只包括当前设备信任，不执行当前登出。
+- 邀请清理默认选当前已使用、撤销或过期码的前 50 个，超出部分展示为剩余候选，需要另开审批，不自动循环删。`--ids` 只接受非秘密 SHA-256 引用；有效/更改后的码拒绝删除，审批后新增码始终保留。D1 单次事务 CAS 全部目标，任一变化整批无写，写后真实 GET 回读，不自动重试。
+- `backup inspect` 要求当前用户所有、私有权限、单硬链接普通文件（最多64 MiB），拒绝路径符号链接。校验 ZIP 防路径穿越/重复条目/越界、CRC、格式版本、关系、计数和完整附件；只输出摘要与哈希，不输出密码验证数据、cipher 内容或凭据。`--compare-instance` 只 GET 目标现存行数与整体替换风险，不是逐条合并；不上传源文件，也不创建审批/修改生产。
+- `restore:drill` **不是独立 tgz 的命令**，需要源码和开发依赖。它执行真实 `importBackupArchiveBytes`，在一次性本地 workerd/D1/R2 中恢复并读回密文行和附件哈希；外网默认禁止，不接受生产 URL/CF Token/remote binding，退出销毁隔离环境。报告写入显式新建 0600 文件，拒绝覆盖。证明可导入和字节一致，不证明 vault 解锁、2FA 可用或备份凭据修复；源文件不变。
+- 本轮没有 CLI 生产导入/远端恢复、备份密钥修复、远端删除或用户删除。跨实例恢复后 API Key/会话需重新建立，portable 备份凭据可能需要可信 Web 的管理员私钥修复；CLI 不获取该私钥或主密码。生产发布验收只做 metadata/dry-run，真实导出/撤销/清理/恢复都在隔离环境。
 
 ## 0.4.0：配置与账号管理
 
@@ -196,8 +227,8 @@ npm pack --dry-run
 
 E2E 在真实 Miniflare/workerd 下运行当前 Worker，通过真实 CLI 子进程访问 HTTP，D1/R2/KV 全部隔离且没有 remote binding/CF 凭据。WebDAV、S3 和 Bitwarden 安装接口仅使用明确的 provider fixture，禁止外网连接；不能把测试目录和数据当作生产核验。测试专用路由只出现在内存里的 Worker 测试入口，既不修改生产 src，也不进入 tgz。
 
-CI 只保留一条 Linux 验证：在 `main` 源码推送、面向 `main` 的 PR 或手动触发时执行 Worker 安全/兼容性回归、CLI 类型检查、单元测试、真实 Worker E2E、依赖审计和干净目录安装。`production` 的部署由 Cloudflare Workers Builds 负责，不另用 GitHub Actions 重复部署；生产 PR 和生产分支推送不重复触发 CLI 构建。第一版兼容基线是 Fork `a72592e` 的 NodeWarden 1.8.0；未知新类型/契约变化会报错，而不是猜测兼容。源代码和许可证位于本仓库 `tools/nwctl`；Commander 的 MIT 许可见 `THIRD_PARTY_NOTICES`。
+CI 只保留一条 Linux 验证：在 `main` 源码推送、面向 `main` 的 PR 或手动触发时执行 Worker 安全/兼容性回归、CLI 类型检查、单元测试、真实 Worker E2E、依赖审计和干净目录安装。`production` 的部署由 Cloudflare Workers Builds 负责，不另用 GitHub Actions 重复部署；生产 PR 和生产分支推送不重复触发 CLI 构建。第一版兼容基线是 Fork `a72592e` 的 NodeWarden 1.8.0；未知新类型/契约变化会报错，而不是猜测兼容。源代码和许可证位于本仓库 `tools/nwctl`；Commander 和 fflate 的 MIT 许可见 `THIRD_PARTY_NOTICES`。
 
 ## 明确不包含
 
-备份设置密钥修复、远端删除/恢复、完整附件导出、用户删除、密码库解密、API Key 创建/轮换、生产部署命令、R2 迁移及无人值守二验授权。不实现全量审计导出或自动定时任务。Passkey 二次确认不包含在首版；必须在网页输入主密码，未知 KDF 明确拒绝。
+备份设置密钥修复、生产导入/远端删除/恢复、用户删除、密码库解密、API Key 创建/轮换、生产部署命令、R2 迁移及无人值守二验授权。不实现全量审计导出或自动定时任务。Passkey 二次确认不包含在首版；必须在网页输入主密码，未知 KDF 明确拒绝。

@@ -106,7 +106,7 @@ export async function handleAuthenticatedRoute(
   path: string,
   method: string
 ): Promise<Response | null> {
-  if (path === '/api/ops/requests' || path.startsWith('/api/ops/requests/') || path.startsWith('/api/ops/config/')) return handleOpsRoute(request, env);
+  if (path === '/api/ops/requests' || path.startsWith('/api/ops/requests/') || path.startsWith('/api/ops/config/') || path.startsWith('/api/ops/bulk/')) return handleOpsRoute(request, env);
   if (method === 'POST' || method === 'PUT' || method === 'DELETE') {
     const blockedAccountPaths = new Set([
       '/api/accounts/set-password',

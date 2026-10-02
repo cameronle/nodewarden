@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { deviceBulk } from "../bulk.js";
 import { Context } from "../context.js";
 import { devicesPage } from "../devices.js";
 import { record, text } from "../contracts.js";
@@ -43,6 +44,35 @@ export function devices(program: Command, c: Context) {
   const group = program
     .command("devices")
     .description("Own-account devices; exact-target management");
+  mutationOptions(
+    group
+      .command("remove-batch")
+      .option("--all", "Reviewed snapshot of all other own-account devices")
+      .option("--ids <ids...>", "Exact selected identifiers")
+      .option(
+        "--include-current",
+        "Explicitly allow logout of current CLI session; Web approval required",
+      ),
+  ).action(
+    c.action("devices remove-batch", async (opts) => deviceBulk(c, opts)),
+  );
+  mutationOptions(
+    group
+      .command("revoke-trust-batch")
+      .option(
+        "--all",
+        "Snapshot remembered own devices; current protected by default",
+      )
+      .option("--ids <ids...>", "Exact selected identifiers")
+      .option(
+        "--include-current",
+        "Also explicitly review current-device trust",
+      ),
+  ).action(
+    c.action("devices revoke-trust-batch", async (opts) =>
+      deviceBulk(c, opts, "device.revoke-trust"),
+    ),
+  );
   group.command("list").action(
     c.action("devices list", async () => {
       const p = await c.profile();
