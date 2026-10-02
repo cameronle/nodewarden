@@ -1,4 +1,5 @@
 import { Command, CommanderError } from "commander";
+import { CLI_VERSION } from "./version.js";
 import { Context } from "./context.js";
 import { CliError } from "./errors.js";
 import { clean, safeText } from "./output.js";
@@ -17,7 +18,7 @@ const program = new Command()
   .description(
     "NodeWarden operations with exact-target controls and browser approval",
   )
-  .version("0.3.0")
+  .version(CLI_VERSION)
   .option("--json", "Machine-readable JSON envelope")
   .option("--profile <name>", "Select a configured instance")
   .option(
