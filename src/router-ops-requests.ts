@@ -1,4 +1,15 @@
 import type { Env, User } from "./types";
+import {
+  configurationMetadata,
+  configurationTarget,
+  isConfiguration,
+  ConfigurationError,
+} from "./services/ops-configuration";
+import {
+  sealOpsCredentials,
+  openOpsCredentials,
+} from "./services/ops-credentials";
+import { credentials } from "../shared/ops-config-schema";
 import { StorageService } from "./services/storage";
 import { AuthService } from "./services/auth";
 import { RateLimitService } from "./services/ratelimit";
@@ -33,6 +44,7 @@ interface OperationRow {
   origin: string;
   action: OpsAction;
   parameters: string;
+  payload: string | null;
   summary: string;
   fingerprint: string;
   state: string;
@@ -71,8 +83,31 @@ function keys(body: Record<string, unknown>, expected: string[]) {
 async function bodyJson(request: Request) {
   if (!request.headers.get("Content-Type")?.startsWith("application/json"))
     fail(415, "JSON required");
-  const raw = await request.text();
-  if (raw.length > 8192) fail(413, "Operation payload too large");
+  const reader = request.body?.getReader();
+  if (!reader) return fail(400, "JSON body required");
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    while (true) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > 16384) {
+        await reader.cancel();
+        return fail(413, "Operation payload too large");
+      }
+      chunks.push(part.value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.length;
+  }
+  const raw = new TextDecoder().decode(bytes);
   try {
     const value = JSON.parse(raw);
     if (value && typeof value === "object" && !Array.isArray(value))
@@ -113,7 +148,15 @@ async function freshContext(request: Request, env: Env) {
   if (user.role !== "admin") return fail(403, "Active administrator required");
   return { user, device, claims, tokenHash: await digest(token), storage };
 }
-async function target(env: Env, action: OpsAction, p: OpsParameters) {
+async function target(
+  env: Env,
+  action: OpsAction,
+  p: OpsParameters,
+  actor: User,
+  secretValue?: unknown,
+) {
+  if (isConfiguration(action))
+    return configurationTarget(env, actor, action, p, secretValue);
   const storage = new StorageService(env.DB);
   if (action === "invite.create")
     return {
@@ -244,11 +287,21 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (origin && origin !== url.origin)
       fail(403, "Cross-origin operation rejected");
     const ctx = await freshContext(request, env);
+    if (url.pathname.startsWith("/api/ops/config/")) {
+      if (request.method !== "GET")
+        return errorResponse("Method not allowed", 405);
+      return jsonResponse(await configurationMetadata(env, url.pathname));
+    }
     if (url.pathname === "/api/ops/requests") {
       if (request.method !== "POST")
         return errorResponse("Method not allowed", 405);
       const body = await bodyJson(request);
-      keys(body, ["action", "parameters", "proofHash"]);
+      keys(
+        body,
+        Object.hasOwn(body, "credentials")
+          ? ["action", "parameters", "proofHash", "credentials"]
+          : ["action", "parameters", "proofHash"],
+      );
       if (!hex64(body.proofHash)) fail(400, "Invalid proof hash");
       let parsed;
       try {
@@ -261,7 +314,29 @@ async function route(request: Request, env: Env): Promise<Response> {
         20,
       );
       if (!budget.allowed) fail(429, "Operation request limit reached");
-      const resolved = await target(env, parsed.action, parsed.parameters),
+      if (
+        Object.hasOwn(body, "credentials") &&
+        parsed.action !== "backup.configure"
+      )
+        fail(400, "Credentials are only allowed for backup configuration");
+      let secretValue: Record<string, string> = {};
+      if (parsed.action === "backup.configure") {
+        try {
+          secretValue = credentials(
+            body.credentials,
+            parsed.parameters.credentialFields!,
+          );
+        } catch {
+          return errorResponse("Invalid credential fields", 400);
+        }
+      }
+      const resolved = await target(
+          env,
+          parsed.action,
+          parsed.parameters,
+          ctx.user,
+          secretValue,
+        ),
         now = Date.now();
       const expires = Math.min(now + 600000, ctx.claims.exp * 1000);
       if (expires - now < 30000)
@@ -281,14 +356,21 @@ async function route(request: Request, env: Env): Promise<Response> {
         origin: url.origin,
         action: parsed.action,
         parameters: JSON.stringify(parsed.parameters),
+        payload: null,
         summary: JSON.stringify(resolved.summary),
         fingerprint: resolved.fingerprint,
         state: "pending",
         created_at: now,
         expires_at: expires,
       };
+      row.payload = await sealOpsCredentials(
+        env,
+        row.id,
+        row.user_id,
+        secretValue,
+      );
       await env.DB.prepare(
-        "INSERT INTO ops_requests (id,user_id,device_id,device_stamp,user_stamp,token_hash,proof_hash,origin,action,parameters,summary,fingerprint,state,created_at,expires_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO ops_requests (id,user_id,device_id,device_stamp,user_stamp,token_hash,proof_hash,origin,action,parameters,summary,fingerprint,state,created_at,expires_at,payload) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
       )
         .bind(
           row.id,
@@ -306,6 +388,7 @@ async function route(request: Request, env: Env): Promise<Response> {
           row.state,
           row.created_at,
           row.expires_at,
+          row.payload,
         )
         .run();
       await audit(env, ctx.user.id, row.id, "request");
@@ -372,18 +455,23 @@ async function route(request: Request, env: Env): Promise<Response> {
           .first())
       )
         fail(401, "Requesting CLI session is no longer active");
-      const resolved = await target(
-        env,
-        row.action,
-        JSON.parse(row.parameters),
-      );
-      if (resolved.fingerprint !== row.fingerprint)
-        fail(409, "Target changed; create a new request");
+      if (body.approve) {
+        const resolved = await target(
+          env,
+          row.action,
+          JSON.parse(row.parameters),
+          ctx.user,
+          await openOpsCredentials(env, row.id, row.user_id, row.payload),
+        );
+        if (resolved.fingerprint !== row.fingerprint)
+          fail(409, "Target changed; create a new request");
+      }
       const changed = await env.DB.prepare(
-        "UPDATE ops_requests SET state=?, expires_at=MIN(expires_at,?) WHERE id=? AND state='pending' AND expires_at>? AND EXISTS (SELECT 1 FROM users WHERE id=? AND security_stamp=? AND status='active' AND role='admin')",
+        "UPDATE ops_requests SET state=?, payload=CASE WHEN ? THEN payload ELSE NULL END, expires_at=MIN(expires_at,?) WHERE id=? AND state='pending' AND expires_at>? AND EXISTS (SELECT 1 FROM users WHERE id=? AND security_stamp=? AND status='active' AND role='admin')",
       )
         .bind(
           body.approve ? "approved" : "denied",
+          body.approve ? 1 : 0,
           Date.now() + 120000,
           row.id,
           Date.now(),
@@ -413,7 +501,7 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (row.expires_at <= Date.now()) fail(410, "Operation expired");
     if (stage === "cancel") {
       const changed = await env.DB.prepare(
-        "UPDATE ops_requests SET state='cancelled' WHERE id=? AND state IN ('pending','approved')",
+        "UPDATE ops_requests SET state='cancelled',payload=NULL WHERE id=? AND state IN ('pending','approved')",
       )
         .bind(row.id)
         .run();
@@ -424,7 +512,13 @@ async function route(request: Request, env: Env): Promise<Response> {
     }
     if (row.state !== "approved")
       fail(409, "Operation not approved or already attempted");
-    const resolved = await target(env, row.action, JSON.parse(row.parameters));
+    const resolved = await target(
+      env,
+      row.action,
+      JSON.parse(row.parameters),
+      ctx.user,
+      await openOpsCredentials(env, row.id, row.user_id, row.payload),
+    );
     if (resolved.fingerprint !== row.fingerprint)
       fail(409, "Target changed; create a new request");
     // Cross-isolate atomic single consumer; a crash leaves executing/unknown, NEVER retryable.
@@ -444,23 +538,28 @@ async function route(request: Request, env: Env): Promise<Response> {
     if (consumed.meta.changes !== 1)
       fail(409, "Operation already consumed, expired or authorization changed");
     try {
-      const response = await execute(
-        env,
-        ctx.user,
-        row,
-        request,
-        resolved.inviteCode,
-      );
+      const response =
+        "apply" in resolved
+          ? await resolved.apply(row.id)
+          : await execute(env, ctx.user, row, request, resolved.inviteCode);
       await env.DB.prepare(
-        "UPDATE ops_requests SET state=? WHERE id=? AND state='executing'",
+        "UPDATE ops_requests SET state=?,payload=NULL WHERE id=? AND state='executing'",
       )
         .bind(response.ok ? "succeeded" : "failed", row.id)
         .run();
       await audit(env, ctx.user.id, row.id, response.ok ? "succeed" : "fail");
       return response;
-    } catch {
+    } catch (error) {
+      if (error instanceof ConfigurationError) {
+        await env.DB.prepare(
+          "UPDATE ops_requests SET state='failed',payload=NULL WHERE id=? AND state='executing'",
+        )
+          .bind(row.id)
+          .run();
+        return errorResponse(error.message, error.status);
+      }
       await env.DB.prepare(
-        "UPDATE ops_requests SET state='unknown' WHERE id=? AND state='executing'",
+        "UPDATE ops_requests SET state='unknown',payload=NULL WHERE id=? AND state='executing'",
       )
         .bind(row.id)
         .run();
@@ -470,7 +569,7 @@ async function route(request: Request, env: Env): Promise<Response> {
       );
     }
   } catch (error) {
-    if (error instanceof OpsError)
+    if (error instanceof OpsError || error instanceof ConfigurationError)
       return errorResponse(error.message, error.status);
     // Avoid logging raw provider errors, password material, or request bodies.
     return errorResponse(

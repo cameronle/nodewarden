@@ -1,3 +1,4 @@
+import { verifyConfiguration } from "./configuration.js";
 import { randomBytes } from "node:crypto";
 import { resolve } from "node:path";
 import type { Command } from "commander";
@@ -22,7 +23,7 @@ export async function requestOperation(
   parameters: OpsParameters,
 ) {
   try {
-    opsParameters(action, parameters);
+    parameters = opsParameters(action, parameters).parameters;
   } catch {
     invalid("Invalid operation parameters.");
   }
@@ -48,6 +49,9 @@ export async function requestOperation(
       action,
       parameters,
       proofHash: sha256(proof),
+      ...(opts.credentials && Object.keys(opts.credentials).length
+        ? { credentials: opts.credentials }
+        : {}),
     }),
   );
   const id = text(result.id),
@@ -60,20 +64,18 @@ export async function requestOperation(
     JSON.stringify(result.parameters) !== JSON.stringify(parameters)
   )
     incompatible();
-  await c
-    .store()
-    .saveOperation(id, {
-      version: 1,
-      id,
-      server: p.server,
-      profile: p.name,
-      device: p.device,
-      sessionDigest: sha256(session.token),
-      proof,
-      action,
-      parameters,
-      output: opts.output ? resolve(opts.output) : null,
-    });
+  await c.store().saveOperation(id, {
+    version: 1,
+    id,
+    server: p.server,
+    profile: p.name,
+    device: p.device,
+    sessionDigest: sha256(session.token),
+    proof,
+    action,
+    parameters,
+    output: opts.output ? resolve(opts.output) : null,
+  });
   c.print(
     {
       id,
@@ -265,6 +267,24 @@ export function operations(program: Command, c: Context) {
               6,
             );
           c.print({ id, action: parsed.action, verified: true });
+        } else if (
+          [
+            "backup.configure",
+            "audit.configure",
+            "audit.clear",
+            "user.status",
+          ].includes(parsed.action)
+        ) {
+          c.print({
+            id,
+            ...(await verifyConfiguration(
+              c,
+              parsed.action,
+              parsed.parameters,
+              result,
+              status,
+            )),
+          });
         } else if (parsed.action === "backup.verify") {
           const response = record(result),
             integrity = record(response.integrity);

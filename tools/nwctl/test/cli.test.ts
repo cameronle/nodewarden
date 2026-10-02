@@ -1,6 +1,10 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+const packageVersion = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 const run = (...args: string[]) =>
   spawnSync(process.execPath, ["bin/nwctl.mjs", ...args], { encoding: "utf8" });
 test("standalone help and version need no network or profile", () => {
@@ -9,7 +13,7 @@ test("standalone help and version need no network or profile", () => {
   assert.match(h.stdout, /backup/);
   const v = run("--version");
   assert.equal(v.status, 0, v.stderr);
-  assert.equal(v.stdout.trim(), "0.3.0");
+  assert.equal(v.stdout.trim(), packageVersion);
 });
 test("unknown commands and flags return JSON errors without echoing argv", () => {
   for (const args of [
@@ -45,6 +49,15 @@ test("every supported command has help; destructive restore/export/delete stay a
     ["backup", "run"],
     ["backup", "remote", "download"],
     ["backup", "remote", "verify"],
+    ["backup", "destinations", "add"],
+    ["backup", "destinations", "update"],
+    ["backup", "destinations", "remove"],
+    ["backup", "schedule", "show"],
+    ["backup", "schedule", "set"],
+    ["audit", "settings", "set"],
+    ["audit", "clear"],
+    ["users", "ban"],
+    ["users", "unban"],
     ["users", "show"],
     ["audit", "settings", "show"],
     ["auth", "ensure"],

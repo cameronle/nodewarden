@@ -9,6 +9,9 @@ import { workerFixture } from "../helpers/worker-fixture.js";
 import { cli } from "../helpers/cli.js";
 import { Store } from "../../src/config.js";
 const exec = promisify(execFile);
+const packageVersion = JSON.parse(
+  await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+).version;
 test(
   "npm pack installs standalone in a clean directory and queries a real Worker",
   { timeout: 120000 },
@@ -51,7 +54,7 @@ test(
       );
       assert.equal(
         (await exec(bin, ["--version"], { cwd: dir })).stdout.trim(),
-        "0.3.0",
+        packageVersion,
       );
       const artifact = await readFile(
         join(dir, "node_modules", "nodewarden-ops-cli", "dist", "cli.mjs"),
@@ -89,6 +92,7 @@ test(
         ).stdout,
       );
       assert.equal(result.data.apiReachable, true);
+      assert.equal(result.data.cliVersion, packageVersion);
       assert.equal(result.data.nodewardenVersion, "unknown");
       const before = await f.snapshot();
       const login = await cli(

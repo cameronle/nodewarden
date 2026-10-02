@@ -1,4 +1,5 @@
 import type { Command } from "commander";
+import { CLI_VERSION } from "../version.js";
 import { Context } from "../context.js";
 import { Client } from "../http.js";
 import { record, text, identity } from "../contracts.js";
@@ -26,7 +27,7 @@ export function doctor(program: Command, c: Context) {
         }
         c.print(
           {
-            cliVersion: "0.3.0",
+            cliVersion: CLI_VERSION,
             server: p.server,
             transport:
               p.allowLoopback && p.server.startsWith("http:")

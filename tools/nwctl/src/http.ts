@@ -2,6 +2,9 @@ import { CliError, invalid } from "./errors.js";
 import { rememberSecret, learnSecrets } from "./output.js";
 const reads = new Set([
   "/api/config",
+  "/api/ops/config/backup",
+  "/api/ops/config/audit",
+  "/api/ops/config/audit-clear",
   "/api/version",
   "/api/accounts/profile",
   "/api/devices",
@@ -99,7 +102,9 @@ export class Client {
     const segment = "[A-Za-z0-9_%~-]+";
     const allowed =
       method === "GET"
-        ? reads.has(path)
+        ? reads.has(path) ||
+          /^\/api\/ops\/config\/audit-clear\/[1-9][0-9]{0,15}$/.test(path) ||
+          /^\/api\/ops\/config\/user\/[A-Za-z0-9_-]{1,128}$/.test(path)
         : method === "PUT"
           ? new RegExp(`^/api/devices/${segment}/name$`).test(path)
           : method === "DELETE"
