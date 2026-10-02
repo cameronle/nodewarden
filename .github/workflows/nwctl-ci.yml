@@ -2,10 +2,10 @@ name: nwctl CI
 on:
   push:
     branches: [main]
-    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
+    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'migrations/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
   pull_request:
     branches: [main]
-    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
+    paths: ['tools/nwctl/**', '.github/workflows/**', 'src/**', 'shared/**', 'migrations/**', 'scripts/**', 'webapp/**', 'wrangler*.toml', 'package*.json', 'README*.md']
   workflow_dispatch:
 permissions:
   contents: read

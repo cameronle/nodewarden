@@ -79,7 +79,11 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
       });
       await vite.listen();
       const origin = "http://127.0.0.1:" + vite.httpServer.address().port;
-      const make = async () => {
+      const make = async (
+        action = "invite.create",
+        parameters: Record<string, unknown> = { expiresInHours: 24 },
+        credentials?: Record<string, string>,
+      ) => {
         const proof = randomBytes(32).toString("hex");
         const response = await fetch(origin + "/api/ops/requests", {
           method: "POST",
@@ -88,8 +92,9 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            action: "invite.create",
-            parameters: { expiresInHours: 24 },
+            action,
+            parameters,
+            ...(credentials ? { credentials } : {}),
             proofHash: createHash("sha256").update(proof).digest("hex"),
           }),
         });
@@ -174,6 +179,88 @@ render(h(CliApprovalPage,{id:new URL(location.href).searchParams.get('id'),email
           "expired",
       );
       assert.equal(await page.locator("#cli-password").count(), 0);
+      const read = async (path: string) => {
+        const r = await fetch(origin + path, {
+          headers: { Authorization: "Bearer" + " " + token },
+        });
+        assert.equal(r.status, 200);
+        return r.json() as Promise<any>;
+      };
+      const untouched = await f.snapshot();
+      const config = await read("/api/ops/config/backup"),
+        policy = await read("/api/ops/config/audit"),
+        user = await read("/api/ops/config/user/" + f.ids.user);
+      const secret = {
+        username: "browser-fixture-USERNAME",
+        password: "browser-fixture-PASSWORD",
+      };
+      const scenarios: [
+        string,
+        Record<string, unknown>,
+        Record<string, string>?,
+      ][] = [
+        [
+          "backup.configure",
+          {
+            expectedRevision: config.revision,
+            mutation: "add",
+            destinationId: "browser-dav",
+            change: {
+              type: "webdav",
+              name: "Browser DAV",
+              destination: { baseUrl: "https://browserdav.example" },
+              schedule: { enabled: false },
+            },
+            credentialFields: ["password", "username"],
+          },
+          secret,
+        ],
+        [
+          "audit.configure",
+          {
+            expectedRevision: policy.revision,
+            retentionDays: 30,
+            maxEntries: null,
+          },
+        ],
+        [
+          "user.status",
+          {
+            expectedRevision: user.revision,
+            userId: f.ids.user,
+            status: "banned",
+          },
+        ],
+      ];
+      for (const width of [1280, 390])
+        for (const [action, parameters, credentials] of scenarios) {
+          await page.setViewportSize({ width, height: 844 });
+          const request = await make(action, parameters, credentials);
+          await page.goto(origin + "/__cli-qa.html?id=" + request.id);
+          await page.locator("#cli-password").waitFor();
+          const body = await page.locator("body").textContent();
+          assert.ok(body?.includes(action));
+          assert.ok(!body?.includes(secret.password));
+          assert.ok(!body?.includes(secret.username));
+          assert.equal(
+            await page.evaluate(
+              () => document.documentElement.scrollWidth <= window.innerWidth,
+            ),
+            true,
+          );
+          await page.locator("#cli-password").fill(password);
+          await page.locator("button[type=submit]").click();
+          await page.locator("[role=status]").waitFor();
+          assert.equal(
+            await page.locator("[data-testid=cli-state]").textContent(),
+            "approved",
+          );
+        }
+      assert.deepEqual(
+        await f.snapshot(),
+        untouched,
+        "Web approval must not mutate business data",
+      );
       assert.deepEqual(errors, []);
     } finally {
       await browser?.close();

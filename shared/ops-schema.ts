@@ -1,10 +1,18 @@
+import {
+  configurationParameters,
+  type ConfigurationParameters,
+} from "./ops-config-schema.js";
 export type OpsAction =
   | "invite.create"
   | "invite.revoke"
   | "backup.run"
   | "backup.download"
-  | "backup.verify";
-export interface OpsParameters {
+  | "backup.verify"
+  | "backup.configure"
+  | "audit.configure"
+  | "audit.clear"
+  | "user.status";
+export interface OpsParameters extends ConfigurationParameters {
   expiresInHours?: number;
   inviteId?: string;
   destinationId?: string;
@@ -14,6 +22,8 @@ export function opsParameters(
   action: unknown,
   value: unknown,
 ): { action: OpsAction; parameters: OpsParameters } {
+  const configured = configurationParameters(action, value);
+  if (configured) return configured;
   const fail = (): never => {
     throw new Error("Invalid operation or parameters");
   };
