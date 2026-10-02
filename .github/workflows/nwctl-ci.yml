@@ -48,6 +48,15 @@ jobs:
       - name: Isolated workerd E2E and clean package install
         working-directory: tools/nwctl
         run: npm run test:e2e
+      - name: Worker and Web type checks, translations and build
+        run: |
+          npx tsc -p tsconfig.json --noEmit
+          npx tsc -p webapp/tsconfig.json --noEmit
+          npm run i18n:validate
+          npm run build
+      - name: Real Chromium approval page
+        working-directory: tools/nwctl
+        run: npm run test:browser
       - name: Verify distributable file list and whitespace
         working-directory: tools/nwctl
         run: |

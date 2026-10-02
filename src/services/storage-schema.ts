@@ -139,6 +139,9 @@ const SCHEMA_STATEMENTS: readonly string[] = [
   'CREATE INDEX IF NOT EXISTS idx_auth_requests_user_pending ON auth_requests(user_id, approved, response_date, authentication_date, creation_date)',
   'CREATE INDEX IF NOT EXISTS idx_auth_requests_device_pending ON auth_requests(user_id, request_device_identifier, creation_date)',
 
+  'CREATE TABLE IF NOT EXISTS ops_requests (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, device_id TEXT NOT NULL, device_stamp TEXT NOT NULL, user_stamp TEXT NOT NULL, token_hash TEXT NOT NULL, proof_hash TEXT NOT NULL, origin TEXT NOT NULL, action TEXT NOT NULL, parameters TEXT NOT NULL, summary TEXT NOT NULL, fingerprint TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE)',
+  'CREATE INDEX IF NOT EXISTS idx_ops_requests_expiry ON ops_requests(expires_at)',
+
   'CREATE TABLE IF NOT EXISTS trusted_two_factor_device_tokens (' +
   'token TEXT PRIMARY KEY, user_id TEXT NOT NULL, device_identifier TEXT NOT NULL, expires_at INTEGER NOT NULL, ' +
   'FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE)',

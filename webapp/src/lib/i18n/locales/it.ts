@@ -1,5 +1,17 @@
 // Complete Italian locale. Translate the values in this file to add a new language. Keep keys and placeholders unchanged.
 const it: Record<string, string> = {
+  "txt_cli_approval": "Autorizzazione operazione CLI",
+  "txt_cli_warning": "Approva solo operazioni richieste da te. Controlla azione e destinazione. Il backup può eliminare vecchi archivi secondo la politica di conservazione. Autorizzazione temporanea e monouso; la password principale non viene inviata alla CLI.",
+  "txt_cli_failed": "Impossibile autorizzare. Controlla account, password, stato e scadenza della richiesta.",
+  "txt_cli_instance": "Istanza",
+  "txt_cli_action": "Azione",
+  "txt_cli_device": "Dispositivo richiedente",
+  "txt_cli_expires": "Scadenza",
+  "txt_cli_state": "Stato",
+  "txt_cli_password": "Password principale (solo per questa conferma)",
+  "txt_cli_approve": "Approva operazione",
+  "txt_cli_deny": "Rifiuta",
+  "txt_cli_approved": "Autorizzata, non ancora eseguita. Esegui la richiesta nella CLI entro due minuti.",
   "nav_account_settings": "Impostazioni Account",
   "nav_admin_panel": "Pannello di Amministrazione",
   "nav_log_center": "Centro Registri",

@@ -1,5 +1,17 @@
 // Complete Russian locale. Keep keys and placeholders unchanged.
 const ru: Record<string, string> = {
+  "txt_cli_approval": "Подтверждение операции CLI",
+  "txt_cli_warning": "Подтверждайте только запрошенные вами операции. Проверьте действие и цель. Резервное копирование может удалить старые архивы согласно политике хранения. Разрешение кратковременное и одноразовое; мастер-пароль не передаётся CLI.",
+  "txt_cli_failed": "Не удалось подтвердить. Проверьте учётную запись, пароль, состояние и срок действия запроса.",
+  "txt_cli_instance": "Сервер",
+  "txt_cli_action": "Действие",
+  "txt_cli_device": "Запрашивающее устройство",
+  "txt_cli_expires": "Действует до",
+  "txt_cli_state": "Состояние",
+  "txt_cli_password": "Мастер-пароль (только для этого подтверждения)",
+  "txt_cli_approve": "Разрешить операцию",
+  "txt_cli_deny": "Отклонить",
+  "txt_cli_approved": "Разрешено, но ещё не выполнено. Выполните запрос в CLI в течение двух минут.",
   "txt_backup_destination_detail_note": "",
   "nav_account_settings": "Настройки учетной записи",
   "nav_admin_panel": "Панель администратора",
