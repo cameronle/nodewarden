@@ -1,4 +1,5 @@
 import { Env, User, Invite } from '../types';
+import { isApprovedOperation } from '../services/ops-proof';
 import { AuthService } from '../services/auth';
 import { StorageService } from '../services/storage';
 import { jsonResponse, errorResponse } from '../utils/response';
@@ -233,7 +234,7 @@ export async function handleAdminCreateInvite(
 
   const storage = new StorageService(env.DB);
   const body = await readJsonBody(request);
-  const passwordError = await requireMasterPasswordHash(env, actorUser, body.masterPasswordHash);
+  const passwordError = isApprovedOperation(request, actorUser.id, 'invite.create') ? null : await requireMasterPasswordHash(env, actorUser, body.masterPasswordHash);
   if (passwordError) return passwordError;
 
   const expiresInHours = Number.isFinite(Number(body.expiresInHours))
@@ -292,7 +293,7 @@ export async function handleAdminDeleteInvite(
   }
 
   const body = await readJsonBody(request);
-  const passwordError = await requireMasterPasswordHash(env, actorUser, body.masterPasswordHash);
+  const passwordError = isApprovedOperation(request, actorUser.id, 'invite.revoke') ? null : await requireMasterPasswordHash(env, actorUser, body.masterPasswordHash);
   if (passwordError) return passwordError;
 
   const storage = new StorageService(env.DB);

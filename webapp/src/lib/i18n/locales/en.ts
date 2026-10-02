@@ -1,5 +1,17 @@
 // Complete English locale. Translate the values in this file to add a new language. Keep keys and placeholders unchanged.
 const en: Record<string, string> = {
+  "txt_cli_approval": "CLI operation approval",
+  "txt_cli_warning": "Only approve an operation you requested. Check the action and target. Backup runs may delete older archives under the existing retention policy. This approval is single-use and expires shortly; your master password is not sent to the CLI.",
+  "txt_cli_failed": "Unable to authorize this operation. Check your account, password, request status and expiry.",
+  "txt_cli_instance": "Instance",
+  "txt_cli_action": "Action",
+  "txt_cli_device": "Requesting device",
+  "txt_cli_expires": "Expires",
+  "txt_cli_state": "Status",
+  "txt_cli_password": "Master password (this confirmation only)",
+  "txt_cli_approve": "Approve this operation",
+  "txt_cli_deny": "Deny",
+  "txt_cli_approved": "Approved. Return to the CLI and execute this request within two minutes. It has not run yet.",
   "nav_account_settings": "Account Settings",
   "nav_admin_panel": "Admin Panel",
   "nav_log_center": "Log Center",

@@ -8,10 +8,16 @@ import { doctor } from "./commands/doctor.js";
 import { backups } from "./commands/backup.js";
 import { users } from "./commands/users.js";
 import { audit } from "./commands/audit.js";
+import { devices } from "./commands/devices.js";
+import { status } from "./commands/status.js";
+import { invites } from "./commands/invites.js";
+import { operations } from "./step-up.js";
 const program = new Command()
   .name("nwctl")
-  .description("Read-only NodeWarden operations")
-  .version("0.1.0")
+  .description(
+    "NodeWarden operations with exact-target controls and browser approval",
+  )
+  .version("0.3.0")
   .option("--json", "Machine-readable JSON envelope")
   .option("--profile <name>", "Select a configured instance")
   .option(
@@ -34,6 +40,10 @@ for (const register of [
   backups,
   users,
   audit,
+  devices,
+  status,
+  invites,
+  operations,
 ])
   register(program, c);
 try {

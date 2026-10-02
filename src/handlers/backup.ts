@@ -51,6 +51,7 @@ import { notifyUserBackupProgress, notifyUserBackupRestoreProgress } from '../du
 import { getMultipartRequestMaxBytes } from '../utils/direct-upload';
 import { verifyPasskeyUserVerificationToken } from '../utils/user-verification-token';
 import { unzipSync } from 'fflate';
+import { isApprovedOperation } from '../services/ops-proof';
 
 function isAdmin(user: User): boolean {
   return user.role === 'admin' && user.status === 'active';
@@ -978,7 +979,7 @@ export async function handleRunAdminConfiguredBackup(request: Request, env: Env,
       return errorResponse('Backup run payload is invalid', 400);
     }
 
-    const verificationError = await requireBackupUserVerification(actorUser, String(body?.masterPasswordHash || ''), env);
+    const verificationError = isApprovedOperation(request, actorUser.id, 'backup.run') ? null : await requireBackupUserVerification(actorUser, String(body?.masterPasswordHash || ''), env);
     if (verificationError) return verificationError;
 
     const outcome = await runConfiguredBackupInDurableObject(env, {
@@ -1036,7 +1037,7 @@ export async function handleDownloadAdminRemoteBackup(request: Request, env: Env
     return errorResponse('Remote backup download payload is invalid', 400);
   }
 
-  const verificationError = await requireBackupUserVerification(actorUser, String(body.masterPasswordHash || ''), env);
+  const verificationError = isApprovedOperation(request, actorUser.id, 'backup.download') ? null : await requireBackupUserVerification(actorUser, String(body.masterPasswordHash || ''), env);
   if (verificationError) return verificationError;
 
   const storage = new StorageService(env.DB);
@@ -1069,7 +1070,7 @@ export async function handleInspectAdminRemoteBackup(request: Request, env: Env,
     return errorResponse('Remote backup integrity payload is invalid', 400);
   }
 
-  const verificationError = await requireBackupUserVerification(actorUser, String(body.masterPasswordHash || ''), env);
+  const verificationError = isApprovedOperation(request, actorUser.id, 'backup.verify') ? null : await requireBackupUserVerification(actorUser, String(body.masterPasswordHash || ''), env);
   if (verificationError) return verificationError;
 
   const storage = new StorageService(env.DB);

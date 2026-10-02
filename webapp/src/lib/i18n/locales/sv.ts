@@ -1,5 +1,17 @@
 // Complete Swedish locale. Translate the values in this file to add a new language. Keep keys and placeholders unchanged.
 const sv: Record<string, string> = {
+  "txt_cli_approval": "Godkänn CLI-åtgärd",
+  "txt_cli_warning": "Godkänn bara åtgärder som du har begärt. Kontrollera åtgärd och mål. Säkerhetskopiering kan radera äldre arkiv enligt lagringspolicyn. Godkännandet är kortvarigt och gäller en gång; huvudlösenordet skickas inte till CLI.",
+  "txt_cli_failed": "Kan inte godkänna. Kontrollera konto, lösenord, begärans tillstånd och giltighetstid.",
+  "txt_cli_instance": "Instans",
+  "txt_cli_action": "Åtgärd",
+  "txt_cli_device": "Begärande enhet",
+  "txt_cli_expires": "Giltig till",
+  "txt_cli_state": "Tillstånd",
+  "txt_cli_password": "Huvudlösenord (endast denna bekräftelse)",
+  "txt_cli_approve": "Godkänn åtgärd",
+  "txt_cli_deny": "Avvisa",
+  "txt_cli_approved": "Godkänd, ännu inte utförd. Utför begäran i CLI inom två minuter.",
   "nav_account_settings": "Kontoinställningar",
   "nav_admin_panel": "Administratörspanel",
   "nav_log_center": "Loggcenter",

@@ -1,5 +1,17 @@
 // Localización completa en español. Mantener claves y marcadores de posición sin cambios.
 const es: Record<string, string> = {
+  "txt_cli_approval": "Autorización de operación CLI",
+  "txt_cli_warning": "Aprueba solo operaciones que hayas solicitado. Comprueba la acción y el destino. Las copias pueden eliminar archivos antiguos según la política de conservación. Autorización temporal de un solo uso; la contraseña maestra no se envía a la CLI.",
+  "txt_cli_failed": "No se puede autorizar. Comprueba la cuenta, la contraseña, el estado y la caducidad.",
+  "txt_cli_instance": "Instancia",
+  "txt_cli_action": "Acción",
+  "txt_cli_device": "Dispositivo solicitante",
+  "txt_cli_expires": "Caducidad",
+  "txt_cli_state": "Estado",
+  "txt_cli_password": "Contraseña maestra (solo para esta confirmación)",
+  "txt_cli_approve": "Aprobar operación",
+  "txt_cli_deny": "Rechazar",
+  "txt_cli_approved": "Autorizada, aún no ejecutada. Ejecuta la solicitud en la CLI antes de dos minutos.",
   "nav_account_settings": "Configuración de la cuenta",
   "nav_admin_panel": "Panel de administración",
   "nav_log_center": "Centro de registros",

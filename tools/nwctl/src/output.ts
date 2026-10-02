@@ -1,6 +1,6 @@
 const secrets = new Set<string>();
 const sensitive =
-  /password|secret|token|authorization|cookie|api[_-]?key|accessKeyId|privateKey|publicKey|accountKeys|^key$|securityStamp|userDecryptionOptions|masterPasswordHash/i;
+  /password|secret|token|authorization|cookie|api[_-]?key|accessKeyId|privateKey|publicKey|accountKeys|^key$|securityStamp|userDecryptionOptions|masterPasswordHash|^proof$|^proofHash$|^inviteLink$|^inviteCode$/i;
 export function rememberSecret(value: unknown): void {
   if (typeof value === "string" && value.length >= 3 && !/^\*+$/.test(value))
     secrets.add(value);

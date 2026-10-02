@@ -1,5 +1,17 @@
 // Complete French locale. Translate the values in this file to add a new language. Keep keys and placeholders unchanged.
 const fr: Record<string, string> = {
+  "txt_cli_approval": "Autorisation CLI",
+  "txt_cli_warning": "Autorisez uniquement une opération que vous avez demandée. Vérifiez l’action et la cible. Une sauvegarde peut supprimer les anciennes archives selon la politique de conservation. Autorisation temporaire à usage unique ; le mot de passe maître ne sera pas envoyé à la CLI.",
+  "txt_cli_failed": "Autorisation impossible. Vérifiez le compte, le mot de passe, l’état et l’expiration de la demande.",
+  "txt_cli_instance": "Instance du serveur",
+  "txt_cli_action": "Opération",
+  "txt_cli_device": "Appareil demandeur",
+  "txt_cli_expires": "Expiration",
+  "txt_cli_state": "État",
+  "txt_cli_password": "Mot de passe maître (pour cette confirmation uniquement)",
+  "txt_cli_approve": "Autoriser cette opération",
+  "txt_cli_deny": "Refuser",
+  "txt_cli_approved": "Autorisée, pas encore exécutée. Exécutez la demande dans la CLI sous deux minutes.",
   "nav_account_settings": "Paramètres du compte",
   "nav_admin_panel": "Panneau d'administration",
   "nav_log_center": "Centre de journaux",

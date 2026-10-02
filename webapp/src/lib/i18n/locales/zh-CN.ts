@@ -1,5 +1,17 @@
 // Complete Simplified Chinese locale. Keep keys and placeholders unchanged.
 const zhCN: Record<string, string> = {
+  "txt_cli_approval": "CLI 操作授权",
+  "txt_cli_warning": "只批准你本人发起的操作，请核对动作和目标。执行备份可能按现有保留策略删除旧档。授权短时有效且只能使用一次，主密码不会交给 CLI。",
+  "txt_cli_failed": "无法授权此操作，请核对账号、主密码、请求状态和有效期。",
+  "txt_cli_instance": "实例",
+  "txt_cli_action": "动作",
+  "txt_cli_device": "请求设备",
+  "txt_cli_expires": "有效期",
+  "txt_cli_state": "状态",
+  "txt_cli_password": "主密码（仅本次确认）",
+  "txt_cli_approve": "批准此操作",
+  "txt_cli_deny": "拒绝",
+  "txt_cli_approved": "已授权，但尚未执行。请在两分钟内返回 CLI 执行此请求。",
   "nav_account_settings": "账户设置",
   "nav_admin_panel": "用户管理",
   "nav_log_center": "日志中心",

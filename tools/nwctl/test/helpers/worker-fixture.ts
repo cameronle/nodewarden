@@ -6,7 +6,9 @@ const repo = fileURLToPath(new URL("../../../../", import.meta.url));
 const require = createRequire(repo + "package.json");
 const { Miniflare, createFetchMock, Log, LogLevel } = require("miniflare");
 const { build } = require("esbuild");
-export async function workerFixture() {
+export async function workerFixture(
+  options: { backupOperations?: boolean } = {},
+) {
   const secret = randomBytes(32).toString("base64url"),
     jwt = randomBytes(48).toString("base64url");
   const ids = { admin: randomUUID(), user: randomUUID(), banned: randomUUID() };
@@ -15,12 +17,13 @@ export async function workerFixture() {
       contents: `
   import worker,{NotificationsHub,BackupTransferRunner} from './src/index.ts';
   import {StorageService} from './src/services/storage.ts';
-  import {saveBackupSettings} from './src/services/backup-config.ts';
+  import {saveBackupSettings,loadBackupSettings} from './src/services/backup-config.ts';
   import {AuthService} from './src/services/auth.ts';
   export {NotificationsHub,BackupTransferRunner};
   export default {async fetch(request,env,ctx) {
    const path=new URL(request.url).pathname;
    if(path==='/__fixture/settings') {const s=new StorageService(env.DB);await saveBackupSettings(s,env,await request.json());return new Response('{}');}
+   if(path==='/__fixture/rename-destination') {const s=new StorageService(env.DB),settings=await loadBackupSettings(s,env,'UTC');settings.destinations[0].name='Changed destination';await saveBackupSettings(s,env,settings);return new Response('{}');}
    if(path==='/__fixture/device') {const {user,device}=await request.json();await new StorageService(env.DB).deleteDevice(user,device);AuthService.invalidateDeviceCache(user,device);return new Response('{}');}
    return worker.fetch(request,env,ctx);
   }};`,
@@ -38,6 +41,19 @@ export async function workerFixture() {
   const mock = createFetchMock();
   mock.disableNetConnect();
   mock
+    .get("https://identity.bitwarden.com")
+    .intercept({ path: "/connect/token", method: "POST" })
+    .reply(
+      200,
+      JSON.stringify({ access_token: "fixture-push-access", expires_in: 3600 }),
+    )
+    .persist();
+  mock
+    .get("https://push.bitwarden.com")
+    .intercept({ path: "/push/delete", method: "POST" })
+    .reply(200, "{}")
+    .persist();
+  mock
     .get("https://api.bitwarden.com")
     .intercept({ path: "/installations", method: "POST" })
     .reply(
@@ -51,10 +67,11 @@ export async function workerFixture() {
   const dav = mock.get("https://dav.example");
   const xml = (path: string) =>
     `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/backups/${path}</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>${path ? "" : "<d:response><d:href>/backups/test.zip</d:href><d:propstat><d:prop><d:resourcetype/><d:getcontentlength>12</d:getcontentlength><d:getlastmodified>Thu, 01 Oct 2026 00:00:00 GMT</d:getlastmodified></d:prop></d:propstat></d:response>"}</d:multistatus>`;
-  dav
-    .intercept({ path: "/backups", method: "PROPFIND" })
-    .reply(207, xml(""), { headers: { "Content-Type": "application/xml" } })
-    .persist();
+  if (!options.backupOperations)
+    dav
+      .intercept({ path: "/backups", method: "PROPFIND" })
+      .reply(207, xml(""), { headers: { "Content-Type": "application/xml" } })
+      .persist();
   dav
     .intercept({ path: "/backups/empty", method: "PROPFIND" })
     .reply(207, xml("empty/"), {
@@ -74,6 +91,72 @@ export async function workerFixture() {
       { headers: { "Content-Type": "application/xml" } },
     )
     .persist();
+  const remoteFiles = new Map<string, Buffer>();
+  if (options.backupOperations) {
+    const { zipSync } = require("fflate");
+    const zip = Buffer.from(
+      zipSync({
+        "fixture.txt": new TextEncoder().encode("isolated backup fixture"),
+      }),
+    );
+    remoteFiles.set("test.zip", zip);
+    const name =
+      "nodewarden_2026-10-01_" +
+      createHash("sha256").update(zip).digest("hex").slice(0, 8) +
+      ".zip";
+    remoteFiles.set(name, zip);
+    dav
+      .intercept({ path: () => true, method: "MKCOL" })
+      .reply(201, "")
+      .persist();
+    dav
+      .intercept({ path: () => true, method: "PUT" })
+      .reply(async (req: any) => {
+        const chunks = [];
+        for await (const chunk of req.body) chunks.push(Buffer.from(chunk));
+        remoteFiles.set(
+          decodeURIComponent(req.path).replace(/^\/backups\//, ""),
+          Buffer.concat(chunks),
+        );
+        return { statusCode: 201, data: "" };
+      })
+      .persist();
+    dav
+      .intercept({ path: () => true, method: "GET" })
+      .reply((req: any) => {
+        const bytes = remoteFiles.get(
+          decodeURIComponent(req.path).replace(/^\/backups\//, ""),
+        );
+        return {
+          statusCode: bytes ? 200 : 404,
+          data: bytes ?? "",
+          responseOptions: { headers: { "Content-Type": "application/zip" } },
+        };
+      })
+      .persist();
+    dav
+      .intercept({ path: () => true, method: "HEAD" })
+      .reply((req: any) => {
+        const bytes = remoteFiles.get(
+          decodeURIComponent(req.path).replace(/^\/backups\//, ""),
+        );
+        return {
+          statusCode: bytes ? 200 : 404,
+          data: "",
+          responseOptions: {
+            headers: { "Content-Length": String(bytes?.length ?? 0) },
+          },
+        };
+      })
+      .persist();
+    dav
+      .intercept({ path: "/backups", method: "PROPFIND" })
+      .reply(() => ({
+        statusCode: 207,
+        data: `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"><d:response><d:href>/backups/</d:href><d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat></d:response>${[...remoteFiles].map(([name, bytes]) => `<d:response><d:href>/backups/${name}</d:href><d:propstat><d:prop><d:resourcetype/><d:getcontentlength>${bytes.length}</d:getcontentlength></d:prop></d:propstat></d:response>`).join("")}</d:multistatus>`,
+      }))
+      .persist();
+  }
   const mf = new Miniflare({
     modules: true,
     script: bundle.outputFiles[0].text,
@@ -223,6 +306,7 @@ export async function workerFixture() {
       secret,
       jwt,
       snapshot,
+      remoteFiles,
       invalidateDevice: async (user: string, device: string) => {
         const r = await fetch(url + "/__fixture/device", {
           method: "POST",
