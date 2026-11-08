@@ -1425,7 +1425,12 @@ input[type='file'].input::file-selector-button {
   .content,
   .route-stage,
   .stack,
-  .backup-grid {
+  .backup-grid,
+  .generator-page,
+  .generator-layout,
+  .generator-output-card,
+  .generator-options-card,
+  .password-security-page {
     min-width: 0;
     max-width: 100%;
   }
